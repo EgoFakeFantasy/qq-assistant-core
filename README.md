@@ -46,6 +46,16 @@ The importer never rewrites the source PDFs. It accounts for unsupported files a
 
 npm start runs a finite offline demonstration with synthetic data. It does not log in, spend model quota or send messages.
 
+## Handwritten mathematical pages
+
+The original visual-semantic indexing workflow is also included as a portable tool. After PDF ingestion, use a bookId from the private corpus manifest and explicitly select the PDF pages:
+
+```sh
+node tools/index-visual-pages.mjs --book-id BOOK_SHA256 --pages 1-12,18
+```
+
+It renders original pages, uses gpt-6.1-sol/high through the same Codex account, indexes three pages per request, records uncertain symbols, and resumes completed batches. It preserves unselected index rows and does not merge malformed or misordered output. This command consumes real model quota when invoked; CI uses an injected synthetic model. Use --all only when you intend to index the entire selected book. Restart an idle Hub after changing its base index. Source images, summaries and batch caches remain private.
+
 ## Bilibili login and autonomous exploration
 
 On Windows, run npm run accounts and separately run npm run accounts:token to display the local panel key. Enter that key in the panel at http://127.0.0.1:3791 and scan with the configured Bilibili account. Account mismatches are rejected. The key display command is only for the local operator and must not be exposed as a QQ tool.
