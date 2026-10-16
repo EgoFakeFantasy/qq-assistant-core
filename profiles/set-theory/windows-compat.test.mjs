@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseQqAgentOutput } from '../../src/infrastructure/codex/qq-agent-output.js';
@@ -11,7 +11,7 @@ test('native absolute attachment paths survive serialization and still obey outp
   const root = await mkdtemp(join(tmpdir(), 'qq-native-'));
   const allowed = join(root, 'ok.txt'); await writeFile(allowed, 'fixture');
   const result = await resolveQqReplyFileAttachments(output(allowed), {event:{qqTaskWorkspace:{outputDir:root}}});
-  assert.equal(result.attachments[0].path, allowed);
+  assert.equal(result.attachments[0].path, await realpath(allowed));
   const denied = await resolveQqReplyFileAttachments(output(allowed), {event:{qqTaskWorkspace:{outputDir:join(root, 'other')}}});
   assert.equal(denied.attachments.length, 0); assert.equal(denied.failures.length, 1);
   assert.doesNotMatch(output('relative.txt'), /\[\[qq_file/);
