@@ -27,10 +27,31 @@
   "autonomousBilibili": {
     "enabled": false,
     "targetGroupId": "1000000001",
-    "intervalMs": 7200000,
-    "maxSharesPerDay": 2,
-    "maxCommentsPerDay": 1,
+    "intervalMs": 1800000,
+    "maxSharesPerDay": 3,
+    "maxCommentsPerDay": 3,
     "commentsEnabled": false,
-    "interestScope": "broad"
+    "interestScope": "broad",
+    "maxVideosPerCycle": 3,
+    "maxLikesPerDay": 12,
+    "likesEnabled": false
+  },
+  "autonomousScholar": {
+    "enabled": false,
+    "targetGroupId": "1000000001",
+    "intervalMs": 10800000,
+    "maxPapersPerCycle": 2,
+    "maxSharesPerDay": 2,
+    "categories": [
+      "math.LO",
+      "math.CO",
+      "math.CT",
+      "cs.LO"
+    ],
+    "interests": [
+      "set theory",
+      "mathematical logic",
+      "combinatorics"
+    ]
   }
 }

@@ -14,7 +14,8 @@ This repository is a GitHub fork of **gl813788-byte/codex-qq-bot**. Its generic 
 | QQ | Receive allowlisted group messages, answer mentions, selectively join discussions, read quoted messages and group files, import selected PDF textbooks |
 | Answers | gpt-6.1-sol with high reasoning; plain QQ text; mathematics and casual conversation use different persona instructions |
 | Media and web | Image understanding, public web search/read, image search and delivery, scoped group-resource reads |
-| Bilibili | QR login and encrypted session storage; search, recommendation feed, related videos, subtitles, media download, sampled frames, local speech recognition, interest-driven selection, optional comments and QQ sharing |
+| Bilibili | QR login and encrypted session storage; search, recommendation feed, related videos, subtitles, media download, sampled frames, local speech recognition, multi-step interest exploration, optional likes/comments and QQ sharing |
+| Academic browsing | arXiv and Crossref journal discovery, public HTML/PDF reading, scope labels, evidence-checked curation and deduplicated QQ recommendations |
 | Accounts | Operator-configured account binding and Windows DPAPI vault; Bilibili is enabled when configured; the Zhihu official API adapter is present but disabled in the production account panel |
 | Scheduling | Three question workers by default, at most two per group and one optional/background task; mentions have priority; reading memory and delivery records are persisted per group |
 
@@ -60,7 +61,7 @@ It renders original pages, uses gpt-6.1-sol/high through the same Codex account,
 
 On Windows, run npm run accounts and separately run npm run accounts:token to display the local panel key. Enter that key in the panel at http://127.0.0.1:3791 and scan with the configured Bilibili account. Account mismatches are rejected. The key display command is only for the local operator and must not be exposed as a QQ tool.
 
-Add videoRuntime paths for FFmpeg, ffprobe, whisper-cli and a compatible local Whisper model to private/live-config.json. See config/assistant.example.json. In private/profile.json, explicitly enable autonomousBilibili.enabled. Its targetGroupId must be the primary allowlisted group. commentsEnabled is false by default and must be explicitly enabled for public comments.
+Add videoRuntime paths for FFmpeg, ffprobe, whisper-cli and a compatible local Whisper model to private/live-config.json. See config/assistant.example.json. In private/profile.json, explicitly enable autonomousBilibili.enabled. Its targetGroupId must be the primary allowlisted group. likesEnabled and commentsEnabled are false by default. Enable them separately in your own deployment. Exploration cadence, videos per cycle, social-action and share limits are configurable.
 
 The explorer combines interests, recommendations, searches and related videos. It downloads the first video part, decodes its audio and supplies the model with timed text and 12 sampled frames. It can inspect additional timestamps. If platform subtitles do not sufficiently cover speech, local Whisper is used. The model receives audio-derived text, not native audio. This is bounded sampling, not a claim that every frame or every multipart video has been viewed.
 
@@ -69,6 +70,10 @@ Comments and shares have separate budgets, account/scope checks, persisted recei
 The Zhihu read-only official API adapter remains disabled by default. There is no claim of a verified Zhihu browser-login flow, arbitrary multi-platform browser automation or universal account support.
 
 See [local operations](docs/ASSISTANT_OPERATIONS.md) for optional Windows supervision and protected QQ password recovery.
+
+## Autonomous academic reading
+
+Enable autonomousScholar.enabled in private/profile.json and use the primary targetGroupId. Sources rotate across arXiv categories and Crossref journal records. Public HTML/PDF is preferred; abstract-only recommendations are labelled. Support quotes must match actual reading blocks, and DOI/title deduplication covers preprint and journal versions. Both interests share one preemptible background slot and the same Codex allowance. See [autonomy configuration](docs/AUTONOMY.md).
 
 ## Layout
 

@@ -10,7 +10,7 @@ import { LocalDurableState } from '../../profiles/set-theory/local-durable-state
 
 // Isolated application composition using the production Hub HTTP adapter.
 // No fallback into legacy commands, other groups, model selection, or tools.
-export async function createTeachingHub({ config, model, transport, knowledge, resources=null, reading=null, runtimeRoot, token, autoDrain = true, additionalScopes = [], backgroundStatus = () => null, runAutonomousBrowse = null }) {
+export async function createTeachingHub({ config, model, transport, knowledge, resources=null, reading=null, runtimeRoot, token, autoDrain = true, additionalScopes = [], backgroundStatus = () => null, runAutonomousBrowse = null, scholarStatus = () => null, runAutonomousScholar = null }) {
   if (typeof token !== 'string' || token.length < 24) throw new Error('AUTH_TOKEN_REQUIRED');
   const bot = await TeachingBot.open({ config, model, transport, knowledge, resources, reading,
     runtimeRoot: join(runtimeRoot, 'turns'), store: new LocalDurableState(join(runtimeRoot, 'state'),{groupId:config.groupId,botId:config.botId}) });
@@ -36,7 +36,7 @@ export async function createTeachingHub({ config, model, transport, knowledge, r
       personaVersion: d.personaVersion, indexedPages: knowledge.pageCount, textbookCount: knowledge.catalog?.length || 0,
       dailyModelCallLimit: config.dailyModelCalls, proactiveIntervalMs: config.proactiveIntervalMs, plainTextFilteringEnabled: true, cannedDisclaimerFilteringEnabled:true, autonomousTopicsEnabled:true, quotedTextReadingEnabled:typeof transport.readQuote==='function',
       reasoningEffort: config.reasoningEffort, groupId: config.groupId, botId: config.botId,
-      queued: groups.reduce((n,g)=>n+g.queued,0), active:workers.diagnostics.active, bilibiliExplorer:backgroundStatus(), workers:workers.diagnostics, groups, allowedGroupIds:[...scopes.keys()], modelCalls:groups.reduce((n,g)=>n+g.modelCalls,0), storageFaulted:groups.some(g=>g.storageFaulted), reading:d.reading,
+      queued: groups.reduce((n,g)=>n+g.queued,0), active:workers.diagnostics.active, bilibiliExplorer:backgroundStatus(), scholarExplorer:scholarStatus(), workers:workers.diagnostics, groups, allowedGroupIds:[...scopes.keys()], modelCalls:groups.reduce((n,g)=>n+g.modelCalls,0), storageFaulted:groups.some(g=>g.storageFaulted), reading:d.reading,
       receiptCount: [...scopes.values()].reduce((n,s)=>n+s.bot.diagnostics.receipts.length,0), closing };
   }
   const server = createHubHttpServer({
@@ -65,11 +65,12 @@ export async function createTeachingHub({ config, model, transport, knowledge, r
         sendJson(res, 403, { error: 'Authenticated loopback request required' }); return;
       }
       if (closing) { sendJson(res, 503, { error: 'Hub closing' }); return; }
-      if(req.method==='POST'&&req.url==='/api/maintenance/bilibili/run'){
+      if(req.method==='POST'&&['/api/maintenance/bilibili/run','/api/maintenance/scholar/run'].includes(req.url)){
         const body=await readBody(req,{requireJson:true,maxBytes:128});
         if(!body||Object.keys(body).length){sendJson(res,400,{error:'EMPTY_OBJECT_REQUIRED'});return;}
-        if(!runAutonomousBrowse){sendJson(res,404,{error:'BROWSING_DISABLED'});return;}
-        const task=runAutonomousBrowse();if(!task){sendJson(res,409,{error:'QUESTIONS_HAVE_PRIORITY'});return;}
+        const run=req.url.includes('/scholar/')?runAutonomousScholar:runAutonomousBrowse;
+        if(!run){sendJson(res,404,{error:'BROWSING_DISABLED'});return;}
+        const task=run();if(!task){sendJson(res,409,{error:'QUESTIONS_HAVE_PRIORITY'});return;}
         void task.catch(()=>{});sendJson(res,202,{started:true});return;
       }
       if(req.method==='POST'&&req.url==='/api/maintenance/pause-workers'){await readBody(req,{requireJson:true,maxBytes:128});workers.pause();sendJson(res,200,workers.diagnostics);return;}

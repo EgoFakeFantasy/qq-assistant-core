@@ -14,7 +14,8 @@
 | QQ | 接收允许群内的消息，处理 @，选择性参与话题，读取引用、群文件，并导入选定的 PDF 教材 |
 | 回答 | 默认 gpt-6.1-sol / high；数学讨论与日常聊天使用不同人格要求；QQ 输出会过滤粗体分隔符与固定防御性尾句 |
 | 图片与网络 | 识图、公开网络搜索和网页读取、搜索并发送图片、按群隔离的资料读取 |
-| B 站 | 扫码登录、加密保存会话、搜索/推荐流/关联视频/字幕、下载视频、抽帧、本地语音转写、按兴趣选择、可选评论及 QQ 分享 |
+| B 站 | 扫码登录、加密保存会话、搜索/推荐流/关联视频/字幕、下载视频、抽帧、本地语音转写、按兴趣连续探索、自主点赞/评论及 QQ 分享 |
+| 学术浏览 | arXiv 与 Crossref 期刊发现、公开 HTML/PDF 正文、摘要范围标记、模型筛选、引文原句校验与去重群推荐 |
 | 账号 | 操作者配置账号绑定，Windows DPAPI 加密存储；B 站可配置启用，知乎官方 API 适配器保留但生产登录面板未启用 |
 | 调度 | 默认 3 个问答工作位，同群最多 2 个，非必要/后台工作最多 1 个；@ 问题优先，阅读记录和发送记录按群保存 |
 
@@ -60,7 +61,7 @@ node tools/index-visual-pages.mjs --book-id BOOK_SHA256 --pages 1-12,18
 
 Windows 下运行 npm run accounts，另开终端运行 npm run accounts:token 查看本机面板密钥，在 http://127.0.0.1:3791 中输入，再用配置的 B 站账号扫码。扫码账号不匹配时会拒绝保存。查看密钥的命令只供本机操作者使用，不能开放成群内工具。
 
-在 private/live-config.json 的 videoRuntime 中配置 FFmpeg、ffprobe、whisper-cli 和兼容的本地 Whisper 模型，参考 config/assistant.example.json。随后在 private/profile.json 中显式开启 autonomousBilibili.enabled。分享目标必须是允许列表中的主群；公开评论默认关闭，需要显式开启 commentsEnabled。
+在 private/live-config.json 的 videoRuntime 中配置 FFmpeg、ffprobe、whisper-cli 和兼容的本地 Whisper 模型，参考 config/assistant.example.json。随后在 private/profile.json 中显式开启 autonomousBilibili.enabled。分享目标必须是允许列表中的主群；公开动作默认关闭；在自己的部署中分别开启 likesEnabled 和 commentsEnabled。连续浏览间隔、每轮视频数、动作及分享次数均可配置。
 
 浏览器逻辑结合兴趣、推荐流、搜索和关联视频寻找内容。它会下载视频首个分段、解码音频，并将带时间戳的文字与 12 张抽样画面交给模型；也支持追加查看其他时间点。平台字幕对语音覆盖不足时会运行本地 Whisper。模型接收的是音频转写文本，不是原生音频输入。这属于有界采样，不表示逐帧看完或看完多分段视频。
 
@@ -69,6 +70,12 @@ Windows 下运行 npm run accounts，另开终端运行 npm run accounts:token �
 知乎只读官方 API 适配器默认关闭；不宣称已经完成知乎浏览器登录、任意多平台浏览器自动操作，或支持所有平台账号。
 
 可选的 Windows 守护和 QQ 加密密码恢复见[本机运维](docs/ASSISTANT_OPERATIONS_CN.md)。
+
+## 自主阅读论文
+
+在 private/profile.json 中开启 autonomousScholar.enabled，并将 targetGroupId 设为主群。它会轮换 arXiv 的 math.LO、math.CO、math.CT、cs.LO，以及 JSL、APAL、Annals of Mathematics、Nature 的 Crossref 期刊条目。优先读取公开 HTML 或 PDF；若正文不可读，只按摘要生成带“摘要阅读”标记的推荐。引文必须能在实际输入页段中匹配。预印本与期刊来源保留区分，相同标题/DOI 不重复分享。
+
+B站与学术阅读轮流使用同一个后台工作位，群问答可以抢占。共享 Codex 额度仍适用；自主阅读使用同样的 gpt-6.1-sol/high。详细配置、实际阅读范围和动作回执见 [自主浏览说明](docs/AUTONOMY_CN.md)。
 
 ## 目录
 

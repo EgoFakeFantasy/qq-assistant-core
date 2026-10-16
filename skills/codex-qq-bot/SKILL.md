@@ -463,3 +463,12 @@ curl -fsS --max-time 3 http://127.0.0.1:3000/get_login_info | jq .
 
 Report the test suite, Hub, dashboard, OneBot login, QQ channel, and recent
 fatal/error logs separately. A process existing is not end-to-end proof.
+
+
+## Portable assistant autonomy
+
+For the assistant profile, use docs/AUTONOMY.md and docs/AUTONOMY_CN.md. Bilibili exploration and scholarly reading rotate in one preemptible background slot; keep mentions ahead of both. Preserve gpt-6.1-sol/high, per-group isolation and the operator's inference-cap setting.
+
+Bilibili likes/comments are separate explicit profile switches. A like requires account/video checks and readback; do not undo existing likes. Keep the durable action ledger when trimming history and never automatically replay uncertain external writes. The model may continue exploring or decline any social action. Scholarly recommendations must retain preprint/journal attribution, actual reading scope, matching support quotes and DOI/title deduplication.
+
+When deploying, verify all question/background activity is idle or checkpointed, replace only the affected Hub/panel, and preserve NapCat/QQ and platform sessions. Verify source discovery and actual reading separately from public delivery; mocks and a model proposal alone do not establish a QQ receipt. Keep all private state and downloaded reading material out of publication.

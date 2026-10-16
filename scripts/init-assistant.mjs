@@ -15,6 +15,7 @@ export async function initializeAssistant({root=repository,botId,groupIds,bilibi
  if(await lstat(configPath).catch(e=>{if(e.code!=='ENOENT')throw e;return null;}))throw Error('PRIVATE_CONFIG_ALREADY_EXISTS');
  const profile=JSON.parse(await readFile(join(repository,'profiles/set-theory/profile.json'),'utf8'));
  Object.assign(profile,{groupId:groupIds[0],botId,allowedGroupIds:groupIds,additionalGroups:groupIds.slice(1).map((groupId,i)=>({groupId,name:'Additional group '+(i+1)}))});
+ profile.autonomousScholar={...profile.autonomousScholar,enabled:false,targetGroupId:groupIds[0]};
  profile.autonomousBilibili={...profile.autonomousBilibili,enabled:false,commentsEnabled:false,targetGroupId:groupIds[0]};
  const corpusRoot=join(privateRoot,'knowledge','corpus'),indexPath=join(privateRoot,'knowledge','pages.json');
  await mkdir(corpusRoot,{recursive:true});

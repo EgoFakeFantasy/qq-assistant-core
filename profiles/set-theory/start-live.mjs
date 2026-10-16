@@ -1,3 +1,5 @@
+import {createScholarRuntime} from './scholar-runtime.mjs';
+import {createBackgroundScheduler} from './background-scheduler.mjs';
 import {createBilibiliRuntime} from './bilibili-runtime.mjs';
 import {createWindowsVault} from './account-vault.mjs';
 import {createPlatformAccounts} from './platform-accounts.mjs';
@@ -49,9 +51,9 @@ if(operation==='--probe-model'){
   const lock=join(root,'hub.lock');let handle;
   try{handle=await open(lock,'wx',0o600);await handle.writeFile(String(process.pid));await handle.close();}
   catch{throw new Error('HUB_ALREADY_RUNNING_OR_STALE_LOCK');}
-  let hub, timer, browseTimer, explorer;
+  let hub, timer, scheduler, explorer, scholar;
   const additionalScopes=[],additionalLibraries=[];
-  const shutdown=async()=>{for(const library of additionalLibraries)library.close();groupLibrary.close();clearInterval(timer);clearInterval(browseTimer);if(hub)await hub.close();await unlink(lock).catch(()=>{});};
+  const shutdown=async()=>{for(const library of additionalLibraries)library.close();groupLibrary.close();clearInterval(timer);scheduler?.close();if(hub)await hub.close();await unlink(lock).catch(()=>{});};
   try{
     for(const group of config.additionalGroups||[]){
       if(!config.allowedGroupIds?.includes(group.groupId)||group.groupId===config.groupId)throw Error('UNAPPROVED_ADDITIONAL_GROUP');
@@ -65,10 +67,11 @@ if(operation==='--probe-model'){
       const scopedModel=createKnowledgeModel({...scopedRuntime,knowledge:scopedKnowledge,groupLibrary:scopedLibrary,resources:scopedResources,webResources:createWebResources(),platformAccounts,prepareImages:scopedKnowledge.prepareImages});
       additionalScopes.push({config:{...config,groupId:group.groupId,groupName:group.name},model:scopedModel,transport:scopedTransport,knowledge:scopedKnowledge,resources:scopedResources,reading:scopedReading,runtimeRoot:scopedRoot});
     }
-    hub=await createTeachingHub({config,model,transport,knowledge,resources,reading,runtimeRoot:root,token:runtime.hubToken,additionalScopes,backgroundStatus:()=>explorer?.diagnostics||null,runAutonomousBrowse:()=>explorer?hub.workers.runBackground(config.groupId,({signal})=>explorer.run({signal,manual:true})):null});
+    hub=await createTeachingHub({config,model,transport,knowledge,resources,reading,runtimeRoot:root,token:runtime.hubToken,additionalScopes,backgroundStatus:()=>explorer?.diagnostics||null,runAutonomousBrowse:()=>scheduler?.run('bilibili',{manual:true})||null,scholarStatus:()=>scholar?.diagnostics||null,runAutonomousScholar:()=>scheduler?.run('scholar',{manual:true})||null});
     explorer=await createBilibiliRuntime({runtime,config,vault:platformVault,transport,onShare:text=>hub.bot.rememberProactive(text)});
+    scholar=await createScholarRuntime({runtime,config,transport,onShare:text=>hub.bot.rememberProactive(text)});
     const address=await hub.listen(runtime.hubPort||3789);
-    const browse=()=>{if(explorer?.due)void hub.workers.runBackground(config.groupId,({signal})=>explorer.run({signal}))?.catch(()=>{});};browseTimer=setInterval(browse,30000);browseTimer.unref();setTimeout(browse,5000).unref();
+    scheduler=createBackgroundScheduler({workers:hub.workers,groupId:config.groupId,jobs:{bilibili:explorer,scholar}});
     let checking=false;const health=async()=>{if(checking)return;checking=true;try{for(const current of [transport,...additionalScopes.map(s=>s.transport)]){try{await current.check();}catch{}}}finally{checking=false;}};await health();timer=setInterval(health,30000);timer.unref();
     console.log(JSON.stringify({started:true,address,model:config.model,reasoningEffort:config.reasoningEffort,indexedPages:knowledge.pageCount,qq:transport.diagnostics}));
     let closing=false;for(const event of ['SIGINT','SIGTERM'])process.on(event,()=>{if(!closing){closing=true;void shutdown().finally(()=>process.exit());}});
