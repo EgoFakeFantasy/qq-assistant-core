@@ -2,6 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {mkdtemp,readFile,writeFile} from 'node:fs/promises';import {join} from 'node:path';import {tmpdir} from 'node:os';
 import {createBilibiliSite} from './bilibili-site.mjs';
 import {BilibiliExplorer} from './bilibili-explorer.mjs';
+import {bilibiliMediaURL} from './bilibili-media.mjs';
 import {createBackgroundScheduler} from './background-scheduler.mjs';
 const uid='4000000004',bv='BV1234567890',v={bvid:bv,aid:2,cid:3,title:'test',duration:120,url:'https://www.bilibili.com/video/'+bv,pages:[]};
 const vault={get:async()=>({uid,cookies:'SESSDATA=fixture;bili_jct=fixture'})};
@@ -51,4 +52,19 @@ test('background scheduler rotates due providers and does not bypass a busy ques
  const calls=[],jobs=Object.fromEntries(['bilibili','scholar'].map(k=>[k,{due:true,run:async()=>calls.push(k)}]));let busy=false;
  const scheduler=createBackgroundScheduler({groupId:'1000000001',jobs,intervalMs:100000,workers:{runBackground(_id,fn){if(busy)return null;return Promise.resolve(fn({signal:new AbortController().signal}));}}});
  try{scheduler.tick();await new Promise(setImmediate);scheduler.tick();await new Promise(setImmediate);assert.deepEqual(calls,['bilibili','scholar']);busy=true;scheduler.tick();await new Promise(setImmediate);assert.equal(calls.length,2);}finally{scheduler.close();}
+});
+
+test('media accepts actual Bilibili Akamai origin and upgrades legacy CDN HTTP without accepting lookalikes',()=>{
+ assert.equal(bilibiliMediaURL('https://upos-hz-mirrorakam.akamaized.net/upgcxcode/fixture.mp4').protocol,'https:');
+ assert.equal(bilibiliMediaURL('http://upos-sz-mirror.bilivideo.com/fixture.mp4').protocol,'https:');
+ assert.equal(bilibiliMediaURL('https://node.bilivideo.cn/fixture.mp4').hostname,'node.bilivideo.cn');
+ for(const u of ['https://evilakamaized.net/a','https://upos-hz-mirrorakam.akamaized.net.evil.example/a','https://user:secret@upos-hz-mirrorakam.akamaized.net/a','https://127.0.0.1/a','https://bilivideo.com.evil.example/a','https://upos-hz-mirrorakam.akamaized.net:8443/a'])assert.throws(()=>bilibiliMediaURL(u),/VIDEO_CDN_DENIED/);
+});
+test('a failed media fetch is not marked watched and remains retryable after a code repair',async()=>{
+ const f=await explorerFixture();f.media.prepare=async()=>{throw Error('VIDEO_CDN_DENIED');};await f.explorer.run();
+ const s=JSON.parse(await readFile(join(f.root,'browse-state.json'),'utf8'));assert.ok(!s.seen.includes(v.bvid));assert.equal(f.calls.like,0);
+});
+
+test('legacy failure migration preserves a later successfully watched copy of the same video',async()=>{
+ const f=await explorerFixture();await f.explorer.run();const path=join(f.root,'browse-state.json'),s=JSON.parse(await readFile(path,'utf8'));s.visits.unshift({bvid:v.bvid,phase:'failed'});await writeFile(path,JSON.stringify(s));await BilibiliExplorer.open(f.options);const restored=JSON.parse(await readFile(path,'utf8'));assert.ok(restored.seen.includes(v.bvid));
 });

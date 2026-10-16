@@ -4,6 +4,11 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {fetchPublic} from './public-fetch.mjs';
 const run=promisify(execFile);
+export function bilibiliMediaURL(value){
+ const url=new URL(value),official=/(^|\.)(bilivideo\.com|bilivideo\.cn|hdslb\.com)$/.test(url.hostname)||url.hostname==='upos-hz-mirrorakam.akamaized.net';
+ if(!official||!['https:','http:'].includes(url.protocol)||url.username||url.password||url.port)throw Error('VIDEO_CDN_DENIED');
+ url.protocol='https:';return url;
+}
 export function sampleTimestamps(duration,count=12){if(!Number.isFinite(duration)||duration<=0)throw Error('INVALID_VIDEO_DURATION');return Array.from({length:count},(_,i)=>Number(((i+0.5)*duration/count).toFixed(2)));}
 export function createBilibiliMedia({site,ffmpegPath,whisperPath,whisperModelPath,download=fetchPublic,runProcess=run,maxDuration=1800,maxBytes=160*1024*1024}={}){
  return {async inspect(evidence,times,{signal}={}){
@@ -14,7 +19,7 @@ export function createBilibiliMedia({site,ffmpegPath,whisperPath,whisperModelPat
   workspace=resolve(workspace);await mkdir(workspace,{recursive:true});if(resolve(await realpath(workspace))!==workspace)throw Error('LINKED_VIDEO_WORKSPACE');
   const video=await site.metadata(bvid,{signal});if(!video.cid||video.duration<10||video.duration>maxDuration)throw Error('VIDEO_DURATION_OUTSIDE_BROWSE_LIMIT');
   let subtitles=[];try{subtitles=await site.subtitle(video,{signal});}catch(e){if(/VERIFICATION|RESTRICTION|BACKOFF|LOGIN/.test(e.message))throw e;}
-  const stream=await site.playback(video,{signal}),url=new URL(stream.url);if(url.protocol!=='https:'||!/(^|\.)(bilivideo\.com|hdslb\.com)$/.test(url.hostname)||url.username||url.password)throw Error('VIDEO_CDN_DENIED');if(stream.bytes>maxBytes)throw Error('VIDEO_TOO_LARGE');
+  const stream=await site.playback(video,{signal}),url=bilibiliMediaURL(stream.url);if(stream.bytes>maxBytes)throw Error('VIDEO_TOO_LARGE');
   const {bytes}=await download(url,{maxBytes,timeoutMs:120000,redirects:0,signal,headers:{referer:video.url,'user-agent':'Mozilla/5.0'}});
   const path=join(workspace,'video.mp4');await writeFile(path,bytes,{flag:'wx',mode:0o600});const frames=[];
   for(const [index,timestamp] of sampleTimestamps(video.duration).entries()){

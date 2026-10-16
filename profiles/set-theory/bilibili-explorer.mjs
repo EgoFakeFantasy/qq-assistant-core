@@ -19,8 +19,10 @@ export class BilibiliExplorer{
   if(s.version!==1||!Array.isArray(s.visits)||!Array.isArray(s.seen)||s.visits.length>100||s.seen.length>1000)throw Error('INVALID_BROWSE_STATE');
   s.actions??={};if(typeof s.actions!=='object'||Array.isArray(s.actions)||Object.keys(s.actions).length>5000)throw Error('INVALID_BROWSE_STATE');
   // Migrate old receipts before trimming visit history.
+  const completedVideos=new Set(s.visits.filter(v=>v.phase==='complete').map(v=>v.bvid));
   for(const v of s.visits){
    v.like??={phase:'not-requested'};
+   if(!completedVideos.has(v.bvid)&&v.phase==='failed'&&!v.frameCount&&['like','comment','share'].every(k=>!v[k]||v[k].phase==='not-requested'))s.seen=s.seen.filter(id=>id!==v.bvid);
    for(const kind of ['like','comment','share']){
     if(v[kind]?.phase==='sending')v[kind].phase='uncertain_after_restart';
     if(v[kind]?.phase!=='not-requested'&&v[kind]?.phase)s.actions[v.bvid]??={};
@@ -94,7 +96,7 @@ export class BilibiliExplorer{
     if(plan.bvid===null){s.interests=queries(plan.nextQueries).length?interests(this.#config,plan.nextQueries):s.interests;s.browseMode='search';if(!completed)s.phase='no-interest';break;}
     const selected=choices.find(v=>v.bvid===plan.bvid);if(!selected)throw Error('CURATOR_UNKNOWN_VIDEO');
     visit={bvid:selected.bvid,title:selected.title,url:selected.url,at:new Date(this.#now()).toISOString(),phase:'watching',like:{phase:'not-requested'},comment:{phase:'not-requested'},share:{phase:'not-requested'}};
-    s.visits.push(visit);s.visits=s.visits.slice(-100);s.seen.push(selected.bvid);s.seen=s.seen.slice(-1000);s.phase='watching';await this.#save();
+    s.visits.push(visit);s.visits=s.visits.slice(-100);s.phase='watching';await this.#save();
     const evidence=await this.#media.prepare(selected.bvid,workspace,{signal});
     try{evidence.publicComments=await this.#site.comments?.(selected.bvid,{signal})||[];}catch(e){if(platformBlocked(autonomyCode(e)))throw e;evidence.publicComments=[];}
     Object.assign(visit,{transcriptKind:evidence.transcriptKind,frameCount:evidence.frames.length,scope:evidence.scope,transcriptEnd:evidence.transcriptEnd,duration:evidence.video.duration,phase:'reviewing'});s.phase='reviewing';await this.#save();
@@ -103,6 +105,7 @@ export class BilibiliExplorer{
     Object.assign(visit,{summary:r.summary.slice(0,1500),visualFramesSupplied:r.visualFramesSupplied||null,interestScore:r.interestScore,evidenceTimes:r.evidenceTimes});
     if(queries(r.nextQueries).length)s.interests=interests(this.#config,r.nextQueries);
     if(['feed','related','search'].includes(r.browseMode))s.browseMode=r.browseMode;
+    s.seen.push(selected.bvid);s.seen=s.seen.slice(-1000);
     await this.#actions(visit,evidence,r,signal);visit.phase='complete';completed++;s.phase='ready';await this.#save();
     await this.#media.cleanup?.(workspace);workspace=null;if(r.continueBrowsing===false)break;
    }
