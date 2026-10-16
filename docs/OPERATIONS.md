@@ -305,3 +305,7 @@ The default remains `127.0.0.1`. Enable LAN only on explicit request:
 3. Limit firewall access to required private subnets and bypass private addresses in proxy/VPN rules.
 4. Test the page and token-authenticated API from another device, and confirm the token is absent from Git, logs and screenshots.
 5. For durable public access, use a managed named tunnel or TLS reverse proxy with authentication and rate limits; do not bind Hub directly to the public internet.
+
+### Windows management-token recovery
+
+The Windows health and saved-password recovery scripts use deployment/napcat-webui-auth.mjs. If a saved WebUI token is rejected, authentication reads the current token from the local NapCat webui.json and retries once without printing or persisting it. Set napcatWebuiConfigPath in private runtime configuration for a custom layout; otherwise the path is derived from napcatEntryPath or the packaged napcat-node layout. Network failures do not trigger token guessing. This renews local panel authentication, not the Tencent QQ session: existing quick login, encrypted password, mutex, backoff and human-challenge pauses stay unchanged. Check the actual account and OneBot group membership after any login.

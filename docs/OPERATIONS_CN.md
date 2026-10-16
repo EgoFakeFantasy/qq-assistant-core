@@ -311,3 +311,7 @@ npm run verify
 3. 防火墙只放行需要的局域网段，代理/VPN 对私网地址使用直连。
 4. 从另一设备验证页面与带 token API；确认 token 没有进入 Git、日志或截图。
 5. 长期公网访问应使用受管命名隧道，或带 TLS、访问控制和限速的反向代理，不要把 Hub 直接绑定到公网。
+
+### Windows 管理密钥恢复
+
+Windows 健康检查及保存密码的恢复器共用 deployment/napcat-webui-auth.mjs。旧 WebUI 密钥被拒绝时，自动读取本机 NapCat webui.json 中的当前密钥并重试一次，不打印或另行保存密钥。自定义布局可在私有运行配置中设置 napcatWebuiConfigPath；否则由 napcatEntryPath 或打包的 napcat-node 布局推导。网络故障不触发密钥猜测。这只恢复本机面板认证，腾讯 QQ 会话仍沿用既有快速登录、加密密码、互斥、退避和人工验证暂停。完成登录后继续核对实际账号和 OneBot 群成员关系。

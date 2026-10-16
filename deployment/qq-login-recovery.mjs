@@ -1,7 +1,7 @@
 import {readFile,writeFile,mkdir,rename} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {createHash} from 'node:crypto';
+import {authenticateWebui} from './napcat-webui-auth.mjs';
 
 export async function recoverLogin({api,botId,passwordMd5,state={},save=async()=>{},now=Date.now,sleep=ms=>new Promise(r=>setTimeout(r,ms))}){
  if(!/^\d{4,20}$/.test(botId||''))throw Error('BOT_ID_REQUIRED');
@@ -39,8 +39,7 @@ async function cli(){
  const p=JSON.parse(await readFile(c.profilePath,'utf8'));
  let input='';for await(const chunk of process.stdin){input+=chunk;if(input.length>100)throw Error('INVALID_CREDENTIAL_INPUT');}
  const passwordMd5=input.trim();input='';
- const base='http://127.0.0.1:6099/api';const a=await(await fetch(base+'/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({hash:createHash('sha256').update(c.webuiToken+'.napcat').digest('hex')}),redirect:'error',signal:AbortSignal.timeout(6000)})).json();
- const credential=a.data?.Credential||a.data?.credential;if(!credential)throw Error('WEBUI_AUTH_FAILED');
+ const {credential}=await authenticateWebui({runtime:c,root});
  const dir=join(c.runtimeRoot,'..','supervision'),path=join(dir,'login-recovery.json');await mkdir(dir,{recursive:true});
  let state={};try{state=JSON.parse(await readFile(path,'utf8'));}catch(e){if(e.code!=='ENOENT')throw e;}
  const save=async value=>{const pending=path+'.pending';await writeFile(pending,JSON.stringify(value,null,2),{mode:0o600});await rename(pending,path);};
