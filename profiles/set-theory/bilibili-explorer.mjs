@@ -17,6 +17,7 @@ export class BilibiliExplorer{
   const store=await openAutonomyStore(root,{stateFile:'browse-state.json',statusFile:'browse-status.json',initial:()=>({version:1,targetGroupId:config.targetGroupId,nextRunAt:0,interests:['集合论','数理逻辑','数学直觉'],seen:[],visits:[],actions:{},day:'',comments:0,shares:0,likes:0,phase:'ready',lastError:null,browseMode:'feed',lastShareAt:0})});
   const s=store.state;if(s.targetGroupId!==config.targetGroupId)throw Error('UNAPPROVED_BROWSE_CONFIG');
   if(s.version!==1||!Array.isArray(s.visits)||!Array.isArray(s.seen)||s.visits.length>100||s.seen.length>1000)throw Error('INVALID_BROWSE_STATE');
+  s.actionPauses??={};
   s.actions??={};if(typeof s.actions!=='object'||Array.isArray(s.actions)||Object.keys(s.actions).length>5000)throw Error('INVALID_BROWSE_STATE');
   // Migrate old receipts before trimming visit history.
   const completedVideos=new Set(s.visits.filter(v=>v.phase==='complete').map(v=>v.bvid));
@@ -36,7 +37,7 @@ export class BilibiliExplorer{
   if(config.interestScope==='broad')s.interests=interests(config,s.interests);
   const e=new BilibiliExplorer({store,site,media,curator,transport,config,now,onShare});await e.#save();return e;
  }
- get diagnostics(){const s=this.#state,c=this.#config;return {enabled:c.enabled,busy:this.#busy,targetGroupId:c.targetGroupId,phase:s.phase,nextRunAt:s.nextRunAt,lastError:s.lastError,interests:s.interests,browseMode:s.browseMode||'search',intervalMs:c.intervalMs,maxVideosPerCycle:c.maxVideosPerCycle,maxSharesPerDay:c.maxSharesPerDay,maxCommentsPerDay:c.maxCommentsPerDay,maxLikesPerDay:c.maxLikesPerDay,likesEnabled:c.likesEnabled===true,commentsEnabled:c.commentsEnabled===true,budget:{day:s.day,likes:s.likes,comments:s.comments,shares:s.shares},interestScope:c.interestScope||'mathematics',model:this.#curator.diagnostics,recent:s.visits.slice(-6).map(v=>({...v}))};}
+ get diagnostics(){const s=this.#state,c=this.#config;return {enabled:c.enabled,busy:this.#busy,targetGroupId:c.targetGroupId,phase:s.phase,nextRunAt:s.nextRunAt,lastError:s.lastError,interests:s.interests,browseMode:s.browseMode||'search',intervalMs:c.intervalMs,maxVideosPerCycle:c.maxVideosPerCycle,maxSharesPerDay:c.maxSharesPerDay,maxCommentsPerDay:c.maxCommentsPerDay,maxLikesPerDay:c.maxLikesPerDay,likesEnabled:c.likesEnabled===true,commentsEnabled:c.commentsEnabled===true,actionPauses:s.actionPauses,budget:{day:s.day,likes:s.likes,comments:s.comments,shares:s.shares},interestScope:c.interestScope||'mathematics',model:this.#curator.diagnostics,recent:s.visits.slice(-6).map(v=>({...v}))};}
  get due(){return this.#config.enabled&&!this.#busy&&this.#now()>=this.#state.nextRunAt;}
  #save(){return this.#store.save(this.diagnostics);}
  #newDay(){const s=this.#state,d=autonomyDay(this.#now());if(s.day!==d){s.day=d;s.comments=0;s.shares=0;s.likes=0;}}
@@ -58,18 +59,23 @@ export class BilibiliExplorer{
    }catch(e){if(platformBlocked(autonomyCode(e)))throw e;}
   }
  }
+ async #actionFailure(v,kind,error){
+  const reason=autonomyCode(error),apiCode=Number.isFinite(error.apiCode)?error.apiCode:null;
+  if(apiCode===-403)this.#state.actionPauses[kind]={reason:'BILIBILI_ACTION_DENIED',apiCode,at:new Date(this.#now()).toISOString()};
+  await this.#record(v,kind,{phase:apiCode===null?'uncertain':'rejected',reason,...(apiCode===null?{}:{apiCode})});if(platformBlocked(reason))throw error;
+ }
  async #actions(v,evidence,review,signal){
   const s=this.#state,c=this.#config;this.#newDay();
-  if(c.likesEnabled&&review.like===true&&s.likes<c.maxLikesPerDay&&this.#mayWrite(v,'like')){
+  if(c.likesEnabled&&!s.actionPauses.like&&review.like===true&&s.likes<c.maxLikesPerDay&&this.#mayWrite(v,'like')){
    signal?.throwIfAborted();s.phase='liking';s.likes++;await this.#record(v,'like',{phase:'sending'});
-   try{const r=await this.#site.like(evidence.video,{signal});await this.#record(v,'like',{...r,phase:r.verified&&r.liked?'verified':'submitted'});}catch(e){await this.#record(v,'like',{phase:'uncertain',reason:autonomyCode(e)});if(platformBlocked(autonomyCode(e)))throw e;}
+   try{const r=await this.#site.like(evidence.video,{signal});await this.#record(v,'like',{...r,phase:r.verified&&r.liked?'verified':'submitted'});}catch(e){await this.#actionFailure(v,'like',e);}
   }
-  if(c.commentsEnabled&&review.commentWorthwhile&&review.interestScore>=0.65&&s.comments<c.maxCommentsPerDay&&review.evidenceTimes.length&&this.#mayWrite(v,'comment')){
+  if(c.commentsEnabled&&!s.actionPauses.comment&&review.commentWorthwhile&&review.interestScore>=0.65&&s.comments<c.maxCommentsPerDay&&review.evidenceTimes.length&&this.#mayWrite(v,'comment')){
    const text=String(review.comment||'').trim();
    if(text.length>=6&&text.length<=320&&!/[\r\n]|https?:\/\/|@|看完全部|完整看完/.test(text)){
     signal?.throwIfAborted();s.phase='posting';s.comments++;await this.#record(v,'comment',{phase:'sending'});
     try{const r=await this.#site.comment(evidence.video,text,{signal});await this.#record(v,'comment',{...r,phase:'submitted'});try{const check=await this.#site.verifyComment(r,{signal});await this.#record(v,'comment',{...v.comment,phase:check.verified?'verified':'submitted',verified:check.verified===true});}catch(e){v.comment.readbackReason=autonomyCode(e);await this.#save();}}
-    catch(e){await this.#record(v,'comment',{phase:'uncertain',reason:autonomyCode(e)});if(platformBlocked(autonomyCode(e)))throw e;}
+    catch(e){await this.#actionFailure(v,'comment',e);}
    }
   }
   if(review.share&&review.interestScore>=0.65&&s.shares<c.maxSharesPerDay&&review.evidenceTimes.length&&this.#now()-(s.lastShareAt||0)>=c.minShareIntervalMs&&this.#mayWrite(v,'share')){
@@ -87,6 +93,7 @@ export class BilibiliExplorer{
   try{
    await this.#save();const health=await this.#transport.check();if(!health.online||!health.memberOfGroup)throw Error('TARGET_QQ_GROUP_OFFLINE');
    const identity=await this.#site.check({signal});if(!identity.connected||!identity.uidMatched)throw Error('BILIBILI_LOGIN_REQUIRED');
+   if(identity.authRevision){if(s.authRevision&&s.authRevision!==identity.authRevision)s.actionPauses={};s.authRevision=identity.authRevision;}
    await this.#reconcile(signal);
    for(let step=0;step<this.#config.maxVideosPerCycle&&this.#now()-at<this.#config.maxCycleMs;step++){
     signal?.throwIfAborted();s.phase='discovering';await this.#save();

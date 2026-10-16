@@ -68,3 +68,13 @@ test('a failed media fetch is not marked watched and remains retryable after a c
 test('legacy failure migration preserves a later successfully watched copy of the same video',async()=>{
  const f=await explorerFixture();await f.explorer.run();const path=join(f.root,'browse-state.json'),s=JSON.parse(await readFile(path,'utf8'));s.visits.unshift({bvid:v.bvid,phase:'failed'});await writeFile(path,JSON.stringify(s));await BilibiliExplorer.open(f.options);const restored=JSON.parse(await readFile(path,'utf8'));assert.ok(restored.seen.includes(v.bvid));
 });
+
+test('platform-denied likes pause across videos and restart while reading continues',async()=>{
+ const f=await explorerFixture();f.site.like=async()=>{f.calls.like++;throw Object.assign(Error('BILIBILI_ACTION_DENIED'),{apiCode:-403});};
+ await f.explorer.run();assert.equal(f.calls.like,1);assert.equal(f.calls.watch,2);assert.equal(f.explorer.diagnostics.actionPauses.like.apiCode,-403);assert.equal(f.explorer.diagnostics.recent[0].like.phase,'rejected');
+ const path=join(f.root,'browse-state.json'),s=JSON.parse(await readFile(path,'utf8'));s.seen=[];await writeFile(path,JSON.stringify(s));const again=await BilibiliExplorer.open(f.options);await again.run({manual:true});assert.equal(f.calls.like,1);
+});
+test('only a new confirmed platform login clears a denied-action pause',async()=>{
+ const f=await explorerFixture();let revision='2026-10-15T00:00:00.000Z';f.site.check=async()=>({connected:true,uidMatched:true,authRevision:revision});f.site.like=async()=>{f.calls.like++;throw Object.assign(Error('BILIBILI_ACTION_DENIED'),{apiCode:-403});};await f.explorer.run();assert.equal(f.calls.like,1);
+ const path=join(f.root,'browse-state.json'),s=JSON.parse(await readFile(path,'utf8'));s.seen=[];await writeFile(path,JSON.stringify(s));revision='2026-10-16T00:00:00.000Z';const again=await BilibiliExplorer.open(f.options);await again.run({manual:true});assert.equal(f.calls.like,2);
+});

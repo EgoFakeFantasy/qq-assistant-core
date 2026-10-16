@@ -64,6 +64,11 @@ export class QuestionWorkerPool {
         this.#pump();
       });
     }
+    // Any ready human reply reclaims a background slot that occupies the optional budget.
+    const current=[...this.#active.values()];
+    if(current.filter(job=>!job.mandatory).length>=this.#optional&&this.#scopes.some(scope=>{const job=scope.bot.peekJob();return job&&!job.mandatory&&current.filter(active=>active.groupId===scope.config.groupId&&!active.background).length<this.#perGroup;})){
+      for(const job of current)if(job.background&&!job.controller.signal.aborted)job.controller.abort();
+    }
     // A new mention may reclaim the background slot; normal replies are never interrupted.
     for(const scope of this.#scopes){
       if(!scope.bot.peekJob()?.mandatory)continue;

@@ -49,3 +49,5 @@ The local account panel shows both tasks, reading scope and action receipts. Aut
 State is private/runtime/bilibili and private/runtime/scholar. Large video/PDF files are removed after reading; notes and sampled frame evidence remain local. There is no automatic pruning of all retained evidence yet. Never publish these directories.
 
 Video viewing normally costs at least3 model calls per video, with more for detail inspection; academic reading normally costs2 per work. Higher cadence consumes shared Codex allowance faster and uses more bandwidth, CPU and disk. Social-action caps are separate from inference limits.
+
+An explicit platform rejection such as -403 persistently pauses that action, while reading and other permitted actions can continue. Only a newly saved platform login clears this pause; rejected operations are not repeatedly probed. Ready non-mention replies also reclaim the optional slot from background browsing.

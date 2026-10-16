@@ -15,7 +15,7 @@ function fixture(groups,options={}){
  }));
  const pool=new QuestionWorkerPool(scopes,{concurrency:3,perGroup:2,optional:1,onError:e=>errors.push(e),...options});
  const finish=async()=>{for(let i=0;i<100;i++){for(const [key,task] of running){running.delete(key);task.resolve();}await tick();if(!pool.diagnostics.active)break;}};
- return {pool,started,running,errors,finish,enqueue:(group,id)=>queues.get(String(group)).push({messageId:id,senderId:id,mandatory:true})};
+ return {pool,started,running,errors,finish,enqueue:(group,id,mandatory=true)=>queues.get(String(group)).push({messageId:id,senderId:id,mandatory})};
 }
 test('global and per-group limits permit three independent jobs before completion',async()=>{
  const f=fixture([[['a'],['b'],['c']],[['d'],['e']]]);
@@ -58,4 +58,9 @@ test('a fresh mention reclaims a running background slot without interrupting no
  const background=f.pool.runBackground('0',options=>new Promise(resolve=>{signal=options.signal;signal.addEventListener('abort',resolve,{once:true});}));await tick();
  f.enqueue(1,'c');f.pool.drain();await background;await until(()=>f.started.length===3);assert.equal(signal.aborted,true);assert.equal(f.pool.diagnostics.activeBackground,0);assert.deepEqual(f.started,['0:a','1:b','1:c']);
  await f.finish();await drained;
+});
+
+test('a ready non-mention reply reclaims the optional background slot',async()=>{
+ const f=fixture([[]]);let signal;const background=f.pool.runBackground('0',options=>new Promise(resolve=>{signal=options.signal;signal.addEventListener('abort',resolve,{once:true});}));await tick();
+ f.enqueue(0,'casual',false);const drained=f.pool.drain();await background;await until(()=>f.started.length===1);assert.equal(signal.aborted,true);assert.deepEqual(f.started,['0:casual']);await f.finish();await drained;
 });
