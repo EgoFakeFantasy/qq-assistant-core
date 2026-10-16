@@ -31,7 +31,7 @@ test('named QQ faces and verified CQ ids are removed without guessing unrelated 
 test('old bot history follows expression policy while member quotes and source state are preserved',()=>{
  const history=[{senderId:'2000000002',text:'在呢😂[狗头]'},{senderId:'12345678',text:'我发了😂'}];
  const clean=cleanBotHistory(history,'2000000002');assert.equal(clean[0].text,'在呢');assert.equal(clean[1].text,'我发了😂');assert.equal(history[0].text,'在呢😂[狗头]');
- assert.ok(personaInstructions.includes(expressionInstructions));assert.equal(PERSONA_VERSION,'2026-10-17.1');
+ assert.ok(personaInstructions.includes(expressionInstructions));assert.equal(PERSONA_VERSION,'2026-10-17.2');
 });
 test('ordinary and proactive OneBot sends enforce the same policy at the final transport',async()=>{
  const groupId='1000000001',botId='2000000002',writes=[];let last;

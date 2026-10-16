@@ -34,7 +34,7 @@ export async function createTeachingHub({ config, model, transport, knowledge, r
     const groups=[...scopes.values()].map(s=>({groupId:s.config.groupId,name:s.config.groupName||null,...s.bot.diagnostics,receipts:undefined,transport:s.transport.diagnostics||null,indexedPages:s.knowledge.pageCount}));
     return { profile: 'set-theory', mode: config.mode, liveEnabled: config.mode === 'live', model: config.model,
       personaVersion: d.personaVersion, indexedPages: knowledge.pageCount, textbookCount: knowledge.catalog?.length || 0,
-      dailyModelCallLimit: config.dailyModelCalls, proactiveIntervalMs: config.proactiveIntervalMs, plainTextFilteringEnabled: true, cannedDisclaimerFilteringEnabled:true, autonomousTopicsEnabled:true, quotedTextReadingEnabled:typeof transport.readQuote==='function',
+      dailyModelCallLimit: config.dailyModelCalls, proactiveIntervalMs: config.proactiveIntervalMs, longReplyForwardingEnabled:true, replyPresentation:transport.diagnostics?.replyPresentation||config.replyPresentation||null, plainTextFilteringEnabled: true, cannedDisclaimerFilteringEnabled:true, autonomousTopicsEnabled:true, quotedTextReadingEnabled:typeof transport.readQuote==='function',
       reasoningEffort: config.reasoningEffort, groupId: config.groupId, botId: config.botId,
       queued: groups.reduce((n,g)=>n+g.queued,0), active:workers.diagnostics.active, bilibiliExplorer:backgroundStatus(), scholarExplorer:scholarStatus(), workers:workers.diagnostics, groups, allowedGroupIds:[...scopes.keys()], modelCalls:groups.reduce((n,g)=>n+g.modelCalls,0), storageFaulted:groups.some(g=>g.storageFaulted), reading:d.reading,
       receiptCount: [...scopes.values()].reduce((n,s)=>n+s.bot.diagnostics.receipts.length,0), closing };

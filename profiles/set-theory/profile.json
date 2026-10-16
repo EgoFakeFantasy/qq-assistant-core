@@ -53,5 +53,10 @@
       "mathematical logic",
       "combinatorics"
     ]
+  },
+  "replyPresentation": {
+    "inlineMaxCharacters": 500,
+    "inlineMaxLines": 12,
+    "forwardNodeCharacters": 800
   }
 }

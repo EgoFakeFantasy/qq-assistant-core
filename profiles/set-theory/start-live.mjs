@@ -30,7 +30,7 @@ const baseKnowledge=await loadTextbooks(runtime);
 const groupLibrary=await createGroupLibrary(runtime,baseKnowledge);const knowledge=groupLibrary.knowledge;
 runtime.autonomousPublicSearch=config.autonomousPublicSearch===true;runtime.autonomousGroupTextbookImport=config.autonomousGroupTextbookImport===true;
 
-const transport=createLiveOneBot({baseUrl:runtime.oneBotBase,token:runtime.oneBotToken,groupId:config.groupId,botId:config.botId,allowProactive:true});
+const transport=createLiveOneBot({baseUrl:runtime.oneBotBase,token:runtime.oneBotToken,groupId:config.groupId,botId:config.botId,replyPresentation:config.replyPresentation,allowProactive:true});
 const platformVault=createWindowsVault(join(root,'..','credentials','platforms'));
 const platformAccounts=createPlatformAccounts({vault:platformVault,expectedUid:runtime.bilibiliUid});
 const resources=createGroupResources({...runtime,transport});const webResources=createWebResources();
@@ -63,7 +63,7 @@ if(operation==='--probe-model'){
       const scopedRuntime={...runtime,runtimeRoot:scopedRoot};
       const scopedLibrary=await createGroupLibrary(scopedRuntime,baseKnowledge);additionalLibraries.push(scopedLibrary);
       const scopedKnowledge=scopedLibrary.knowledge;
-      const scopedTransport=createLiveOneBot({baseUrl:runtime.oneBotBase,token:runtime.oneBotToken,groupId:group.groupId,botId:config.botId});
+      const scopedTransport=createLiveOneBot({baseUrl:runtime.oneBotBase,token:runtime.oneBotToken,groupId:group.groupId,botId:config.botId,replyPresentation:config.replyPresentation});
       const scopedResources=createGroupResources({...scopedRuntime,transport:scopedTransport});
       const scopedReading=await ReadingMemory.open(join(scopedRoot,'reading','reading-state.json'),{groupId:group.groupId});
       const scopedModel=createKnowledgeModel({...scopedRuntime,knowledge:scopedKnowledge,groupLibrary:scopedLibrary,resources:scopedResources,webResources:createWebResources(),platformAccounts,prepareImages:scopedKnowledge.prepareImages});

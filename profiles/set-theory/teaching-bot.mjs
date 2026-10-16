@@ -1,3 +1,4 @@
+import {normalizeReplyPresentation} from './reply-layout.mjs';
 import {personaInstructions,conversationMode,PERSONA_VERSION} from './persona.mjs';
 import {formatQQReply,formatWebSources,cleanBotHistory} from './response-format.mjs';
 import { mkdtemp, mkdir, realpath, writeFile } from 'node:fs/promises';
@@ -26,7 +27,7 @@ export function validateProfile(config) {
     if (!Number.isSafeInteger(config[key]) || config[key] < 0) throw new Error(`INVALID_${key}`);
   }
   for(const [key,max] of [['workerConcurrency',6],['perGroupConcurrency',3],['optionalConcurrency',2]])if(config[key]!==undefined&&(!Number.isInteger(config[key])||config[key]<1||config[key]>max))throw Error('INVALID_'+key);
-  return Object.freeze({ ...config });
+  return Object.freeze({ ...config, replyPresentation:normalizeReplyPresentation(config.replyPresentation) });
 }
 
 export class TeachingBot {
@@ -92,10 +93,10 @@ export class TeachingBot {
     await this.#checkpoint();
     try {
       const result = await Promise.race([
-        this.#transport.send({ groupId: this.#config.groupId, replyTo: String(event.raw.message_id), text,images }),
+        this.#transport.send({ groupId: this.#config.groupId, replyTo: String(event.raw.message_id), question:event.text, text,images }),
         new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('DELIVERY_TIMEOUT')), 30000); })
       ]);
-      receipt = { eventId: String(event.raw.message_id), status, delivered: result?.ok === true && Boolean(result.messageId), replyId:result?.messageId?String(result.messageId):null };
+      receipt = { eventId: String(event.raw.message_id), status, delivered: result?.ok === true && Boolean(result.messageId), replyId:result?.messageId?String(result.messageId):null, ...(result?.deliveryMode==='forward'?{deliveryMode:'forward',forwardId:result.forwardId||null,verified:result.verified===true,nodeCount:result.nodeCount}: {}) };
     } catch { receipt = { eventId: String(event.raw.message_id), status, delivered: false }; }
     finally { clearTimeout(timer); }
     // Do not retry an uncertain write: a timeout may have happened after delivery.

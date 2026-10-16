@@ -45,6 +45,15 @@ model and group messages select IDs only. Preserve per-question workspace copies
 maximum one local sticker, and explicit-request restrictions for web image delivery.
 See docs/LOCAL_STICKERS.md / docs/LOCAL_STICKERS_CN.md. Never publish QQ cached images.
 
+## Research-assistant long replies
+
+See docs/LONG_REPLIES.md / docs/LONG_REPLIES_CN.md. The set-theory transport
+folds long text before the first write, using bot-authored node cards only.
+Check outer message group/author before get_forward_msg; child group ids may be
+placeholders. Verify complete content and persist forward receipts. Never retry
+an uncertain write, mix root node and plain segments, or substitute a plain-text
+flood. Keep ordinary short replies and current QQ login unchanged.
+
 ## Local runtime
 
 On this configured machine:

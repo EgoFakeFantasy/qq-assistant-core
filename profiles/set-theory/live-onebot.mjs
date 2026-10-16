@@ -1,11 +1,13 @@
 import {readFile} from 'node:fs/promises';
 import {formatQQReply} from './response-format.mjs';
-export function createLiveOneBot({ baseUrl, token, groupId, botId, allowProactive = false, fetchFn = fetch }) {
+import {normalizeReplyPresentation,planReply,makeReplyNodes,forwardReference,parseForwardRecords,forwardReplyText} from './reply-layout.mjs';
+export function createLiveOneBot({ baseUrl, token, groupId, botId, allowProactive = false, replyPresentation, fetchFn = fetch }) {
   const base = new URL(baseUrl);
   if (!['http:', 'https:'].includes(base.protocol) || !['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname)
       || base.username || base.password || base.pathname !== '/' || base.search || base.hash) throw new Error('LOOPBACK_ONEBOT_REQUIRED');
   if (typeof token !== 'string' || token.length < 24) throw new Error('ONEBOT_TOKEN_REQUIRED');
-  const diagnostics = { online: false, memberOfGroup: false, sends: 0, failedSends: 0, checkedAt: null, quoteReads:0, quoteMisses:0 };
+  const presentation=normalizeReplyPresentation(replyPresentation);let botNickname='QQ assistant';
+  const diagnostics = {replyPresentation:presentation,forwardSends:0,forwardReadbacks:0,forwardVerificationFailures:0, online: false, memberOfGroup: false, sends: 0, failedSends: 0, checkedAt: null, quoteReads:0, quoteMisses:0 };
   async function call(action, params = {}, timeoutMs=2500) {
     const response = await fetchFn(new URL(action, base), { method: 'POST',
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
@@ -19,12 +21,36 @@ export function createLiveOneBot({ baseUrl, token, groupId, botId, allowProactiv
     try {
       const login = await call('get_login_info');
       if (String(login.user_id) !== botId) throw new Error('WRONG_BOT_ACCOUNT');
+      botNickname=Array.from(formatQQReply(login.nickname||'QQ assistant')).slice(0,40).join('')||'QQ assistant';
       const groups = await call('get_group_list');
       diagnostics.online = true; diagnostics.memberOfGroup = groups.some(g => String(g.group_id) === groupId);
       diagnostics.checkedAt = new Date().toISOString(); return { ...diagnostics };
     } catch (error) { diagnostics.online = false; diagnostics.memberOfGroup = false; throw error; }
   }
 async function imageSegments(images){if(!Array.isArray(images)||images.length>2)throw new Error('IMAGE_SEND_LIMIT');return Promise.all(images.map(async image=>{if(!image||typeof image.path!=='string')throw new Error('INVALID_OUTGOING_IMAGE');const bytes=await readFile(image.path);if(bytes.length>8*1024*1024||!(bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))||bytes[0]===255&&bytes[1]===216))throw new Error('INVALID_OUTGOING_IMAGE');return {type:'image',data:{file:'base64://'+bytes.toString('base64')}};}));}
+  async function ownForwardRecords(message,reference=forwardReference(message),timeoutMs=5000){
+    if(message.message_type!=='group'||String(message.group_id)!==groupId||String(message.sender?.user_id||message.user_id)!==botId||!reference)throw Error('ONEBOT_SCOPE');
+    return parseForwardRecords(await call('get_forward_msg',{message_id:reference},timeoutMs),botId);
+  }
+  async function sendForward(message,text,images,plan){
+    const nodes=makeReplyNodes({plan,botId,nickname:botNickname,replyTo:message.replyTo,question:formatQQReply(message.question||''),images});
+    const sent=await call('send_group_forward_msg',{group_id:Number(groupId),messages:nodes},18000);
+    if(sent?.message_id==null)throw Error('MISSING_DELIVERY_RECEIPT');
+    diagnostics.sends++;diagnostics.forwardSends++;diagnostics.lastDeliveryMode='forward';
+    const id=String(sent.message_id);let verified=false;
+    let reference=typeof(sent.res_id||sent.forward_id)==='string'?(sent.res_id||sent.forward_id):null;
+    try{
+      const parent=await call('get_msg',{message_id:Number(id)},3000);
+      const parentReference=forwardReference(parent);
+      if(parentReference){
+        reference=parentReference;
+        const rows=await ownForwardRecords(parent,reference,3000);
+        verified=rows.length===nodes.length&&rows.every((row,i)=>row.text===nodes[i].data.content.filter(s=>s.type==='text').map(s=>s.data.text).join('')&&row.images.length===nodes[i].data.content.filter(s=>s.type==='image').length)&&forwardReplyText(rows)===text;
+      }
+    }catch{}
+    if(verified)diagnostics.forwardReadbacks++;else diagnostics.forwardVerificationFailures++;
+    return {ok:true,messageId:id,deliveryMode:'forward',forwardId:reference,verified,nodeCount:nodes.length};
+  }
   let fileCache=null;
   async function listGroupFiles({refresh=false}={}){
     await check();if(!diagnostics.memberOfGroup)throw new Error('BOT_NOT_IN_GROUP');
@@ -38,37 +64,41 @@ async function imageSegments(images){if(!Array.isArray(images)||images.length>2)
     const value=[...new Map(files.map(f=>[f.fileId,f])).values()];fileCache={time:Date.now(),value};diagnostics.groupFilesListed=value.length;return value;
   }
   async function groupFileUrl(fileId){const f=(await listGroupFiles()).find(f=>f.fileId===fileId);if(!f)throw new Error('UNKNOWN_GROUP_FILE');const data=await call('get_group_file_url',{group_id:Number(groupId),file_id:f.fileId,busid:f.busid},20000);if(typeof data?.url!=='string')throw new Error('GROUP_FILE_URL_MISSING');return {file:f,url:data.url};}
-  async function messageMedia(messageId){if(!/^-?\d{1,20}$/.test(String(messageId)))return {images:[],files:[]};const m=await call('get_msg',{message_id:Number(messageId)},12000);if(m.message_type!=='group'||String(m.group_id)!==groupId)throw new Error('ONEBOT_SCOPE');return {images:(m.message||[]).filter(s=>s.type==='image').map(s=>({file:String(s.data?.file||''),url:String(s.data?.url||'')})).slice(0,3),files:(m.message||[]).filter(s=>s.type==='file').map(s=>({fileId:String(s.data?.file_id||s.data?.id||''),name:String(s.data?.name||'')})).slice(0,2)};}
+  async function messageMedia(messageId){if(!/^-?\d{1,20}$/.test(String(messageId)))return {images:[],files:[]};const m=await call('get_msg',{message_id:Number(messageId)},12000);if(m.message_type!=='group'||String(m.group_id)!==groupId)throw new Error('ONEBOT_SCOPE');let segments=m.message||[];if(forwardReference(m)&&String(m.sender?.user_id||m.user_id)===botId){segments=(await ownForwardRecords(m)).flatMap(r=>r.segments);}return {images:segments.filter(s=>s.type==='image').map(s=>({file:String(s.data?.file||''),url:String(s.data?.url||'')})).slice(0,3),files:(m.message||[]).filter(s=>s.type==='file').map(s=>({fileId:String(s.data?.file_id||s.data?.id||''),name:String(s.data?.name||'')})).slice(0,2)};}
   async function imageUrl(ref){if(ref.url){const u=new URL(ref.url);if(['https:','http:'].includes(u.protocol)&&/(?:^|\.)(?:qq\.com|qpic\.cn|gtimg\.cn)$/.test(u.hostname))return u.href;}if(!/^[A-Za-z0-9_.-]{1,180}$/.test(ref.file||''))throw new Error('INVALID_IMAGE_REFERENCE');const data=await call('get_image',{file:ref.file},15000);const u=new URL(data.url||'');if(!['https:','http:'].includes(u.protocol))throw new Error('IMAGE_URL_MISSING');return u.href;}
   return { kind: 'live', diagnostics, check, async sendProactive(message){
     if(!allowProactive||message.groupId!==groupId||typeof message.text!=='string'||message.text.length>1800)throw Error('PROACTIVE_GROUP_SCOPE');
-    const text=formatQQReply(message.text);if(!text)throw Error('EMPTY_PLAIN_TEXT');await check();if(!diagnostics.memberOfGroup)throw Error('BOT_NOT_IN_GROUP');
-    const sent=await call('send_group_msg',{group_id:Number(groupId),message:[{type:'text',data:{text}}]},25000);
-    if(sent?.message_id==null)throw Error('MISSING_DELIVERY_RECEIPT');diagnostics.sends++;
-    const id=String(sent.message_id);let verified=false;
-    try{const readback=await call('get_msg',{message_id:Number(id)},10000);verified=readback.message_type==='group'&&String(readback.group_id)===groupId&&String(readback.sender?.user_id||readback.user_id)===botId&&readback.message.filter(s=>s.type==='text').map(s=>String(s.data?.text||'')).join('')===text;}catch{}
-    return {ok:true,messageId:id,verified};
+    const text=formatQQReply(message.text);if(!text)throw Error('EMPTY_PLAIN_TEXT');
+    const plan=planReply(text,presentation);await check();if(!diagnostics.memberOfGroup)throw Error('BOT_NOT_IN_GROUP');
+    try{
+      if(plan.mode==='forward')return await sendForward(message,text,[],plan);
+      const sent=await call('send_group_msg',{group_id:Number(groupId),message:[{type:'text',data:{text}}]},25000);
+      if(sent?.message_id==null)throw Error('MISSING_DELIVERY_RECEIPT');diagnostics.sends++;diagnostics.lastDeliveryMode='inline';
+      const id=String(sent.message_id);let verified=false;
+      try{const readback=await call('get_msg',{message_id:Number(id)},10000);verified=readback.message_type==='group'&&String(readback.group_id)===groupId&&String(readback.sender?.user_id||readback.user_id)===botId&&readback.message.filter(s=>s.type==='text').map(s=>String(s.data?.text||'')).join('')===text;}catch{}
+      return {ok:true,messageId:id,verified};
+    }catch(error){diagnostics.failedSends++;throw error;}
   },async listJoinedGroups(){const login=await call('get_login_info');if(String(login.user_id)!==botId)throw Error('WRONG_BOT_ACCOUNT');const groups=await call('get_group_list');return groups.filter(g=>/^\d{4,20}$/.test(String(g.group_id))&&typeof g.group_name==='string').map(g=>({groupId:String(g.group_id),name:g.group_name}));},listGroupFiles,groupFileUrl,messageMedia,imageUrl, async readQuote({groupId:requestedGroup,messageId}){
     if(requestedGroup!==groupId||!(/^-?\d{1,20}$/).test(messageId)||!Number.isSafeInteger(Number(messageId)))return null;
     try{
       const message=await call('get_msg',{message_id:Number(messageId)});
       if(message.message_type!=='group'||String(message.group_id)!==groupId){diagnostics.quoteMisses++;return null;}
-      const text=Array.isArray(message.message)?message.message.filter(s=>s.type==='text').map(s=>String(s.data?.text||'')).join('').slice(0,2000):'';
+      let text=Array.isArray(message.message)?message.message.filter(s=>s.type==='text').map(s=>String(s.data?.text||'')).join('').slice(0,2000):'';if(forwardReference(message)&&String(message.sender?.user_id||message.user_id)===botId)text=forwardReplyText(await ownForwardRecords(message)).slice(0,16000);
       if(!text){diagnostics.quoteMisses++;return null;}
       diagnostics.quoteReads++;
       return {messageId:String(messageId),senderId:String(message.sender?.user_id||message.user_id||''),text:String(message.sender?.user_id||message.user_id)===botId?formatQQReply(text):text};
     }catch{diagnostics.quoteMisses++;return null;}
   }, async send(message) {
-    if (message.groupId !== groupId || typeof message.text !== 'string' || !message.text.trim()) throw new Error('ONEBOT_SCOPE');
-    const plainText = formatQQReply(message.text);
-    if (!plainText) throw new Error('EMPTY_PLAIN_TEXT');
-    await check();
-    if (!diagnostics.memberOfGroup) throw new Error('BOT_NOT_IN_GROUP');
+    if(message.groupId!==groupId||typeof message.text!=='string'||!message.text.trim())throw Error('ONEBOT_SCOPE');
+    const text=formatQQReply(message.text);if(!text)throw Error('EMPTY_PLAIN_TEXT');
+    const plan=planReply(text,presentation);
+    const images=await imageSegments(message.images||[]);
+    await check();if(!diagnostics.memberOfGroup)throw Error('BOT_NOT_IN_GROUP');
     try {
-      const data = await call('send_group_msg', { group_id: Number(groupId), message: [
-        { type: 'reply', data: { id: String(message.replyTo) } }, { type: 'text', data: { text: plainText } }, ...await imageSegments(message.images||[])] },25000);
-      if (data?.message_id == null) throw new Error('MISSING_DELIVERY_RECEIPT');
-      diagnostics.sends++; return { ok: true, messageId: String(data.message_id) };
-    } catch (error) { diagnostics.failedSends++; throw error; }
+      if(plan.mode==='forward')return await sendForward(message,text,images,plan);
+      const data=await call('send_group_msg',{group_id:Number(groupId),message:[{type:'reply',data:{id:String(message.replyTo)}},{type:'text',data:{text}},...images]},25000);
+      if(data?.message_id==null)throw Error('MISSING_DELIVERY_RECEIPT');
+      diagnostics.sends++;diagnostics.lastDeliveryMode='inline';return {ok:true,messageId:String(data.message_id)};
+    }catch(error){diagnostics.failedSends++;throw error;}
   } };
 }

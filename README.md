@@ -69,6 +69,8 @@ Comments and shares have separate budgets, account/scope checks, persisted recei
 
 The Zhihu read-only official API adapter remains disabled by default. There is no claim of a verified Zhihu browser-login flow, arbitrary multi-platform browser automation or universal account support.
 
+Replies above 500 visible characters or 12 lines are folded into a merged QQ chat-record card, preserving full text, citations and images. See [Long replies](docs/LONG_REPLIES.md).
+
 Local expression policy and the optional reviewed cute-sticker catalog are described in [Local stickers](docs/LOCAL_STICKERS.md). Actual QQ image assets remain private.
 
 See [local operations](docs/ASSISTANT_OPERATIONS.md) for optional Windows supervision and protected QQ password recovery.

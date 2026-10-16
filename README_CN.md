@@ -69,6 +69,8 @@ Windows 下运行 npm run accounts，另开终端运行 npm run accounts:token �
 
 知乎只读官方 API 适配器默认关闭；不宣称已经完成知乎浏览器登录、任意多平台浏览器自动操作，或支持所有平台账号。
 
+长回复默认超过500字或12行自动折叠为QQ聊天记录卡片，完整保留正文、引用与图片；配置见[长回复说明](docs/LONG_REPLIES_CN.md)。
+
 本地可爱表情的审核目录和选择规则见[表情配置](docs/LOCAL_STICKERS_CN.md)。实际 QQ 表情素材保持私有。
 
 可选的 Windows 守护和 QQ 加密密码恢复见[本机运维](docs/ASSISTANT_OPERATIONS_CN.md)。
