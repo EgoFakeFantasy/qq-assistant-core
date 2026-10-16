@@ -36,6 +36,15 @@ the tracked `skills/codex-qq-bot/SKILL.md` byte-identical with every installed
 copy that exists: `~/.codex/skills/codex-qq-bot/SKILL.md` for Codex and
 `~/.claude/skills/codex-qq-bot/SKILL.md` for Claude Code.
 
+## Research-assistant expression policy
+
+The set-theory profile shares expression-policy.mjs across QQ and Bilibili comments.
+Keep its warm, non-mocking style in every independent curator prompt and delivery path.
+Local cute stickers must come from the operator-reviewed, hash-pinned private catalog;
+model and group messages select IDs only. Preserve per-question workspace copies,
+maximum one local sticker, and explicit-request restrictions for web image delivery.
+See docs/LOCAL_STICKERS.md / docs/LOCAL_STICKERS_CN.md. Never publish QQ cached images.
+
 ## Local runtime
 
 On this configured machine:

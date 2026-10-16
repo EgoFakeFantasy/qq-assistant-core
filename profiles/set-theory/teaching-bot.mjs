@@ -237,7 +237,7 @@ export class TeachingBot {
         const supplied=answer.resolvedSources||sources;
         const recorded=this.#reading?await this.#reading.observe({sources:supplied,citations:answer.citations,knowledgeTrace:answer.knowledgeTrace||[],messageId:event.raw.message_id,userId:event.senderId,recommendation}):[];
         const feedback=recorded.length?'资料编号：'+recorded.map(x=>x.id).join('、')+'；可用 /反馈 有帮助、已经会了、不感兴趣 或 意外收获。':'';
-        const receipt=await this.#send(event, [answer.text, references, webReferences, feedback, request.attachmentNotice,...(answer.outgoingImages||[]).map(i=>`图片：${i.title}；来源：${i.sourceUrl}；作者：${i.author||'见来源页面'}；许可：${i.license||'见来源页面'}`)].filter(Boolean).join('\n\n'), 'answer',answer.outgoingImages||[]);
+        const receipt=await this.#send(event, [answer.text, references, webReferences, feedback, request.attachmentNotice,...(answer.outgoingImages||[]).filter(i=>i.kind!=='local-sticker').map(i=>`图片：${i.title}；来源：${i.sourceUrl}；作者：${i.author||'见来源页面'}；许可：${i.license||'见来源页面'}`)].filter(Boolean).join('\n\n'), 'answer',answer.outgoingImages||[]);
         if(this.#reading&&receipt.delivered)await this.#reading.observe({sources:supplied,citations:answer.citations,knowledgeTrace:answer.knowledgeTrace||[],messageId:event.raw.message_id,userId:event.senderId,recommendation,delivered:true,replyId:receipt.replyId});
       } catch (error) {
         // No backend error text, path, prompt or credentials leak to the group.

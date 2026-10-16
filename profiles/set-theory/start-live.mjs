@@ -1,3 +1,4 @@
+import {createLocalStickers} from './local-stickers.mjs';
 import {createScholarRuntime} from './scholar-runtime.mjs';
 import {createBackgroundScheduler} from './background-scheduler.mjs';
 import {createBilibiliRuntime} from './bilibili-runtime.mjs';
@@ -23,6 +24,7 @@ const runtime=JSON.parse(await readFile(resolve(args[at+1]),'utf8'));
 const config=JSON.parse(await readFile(runtime.profilePath?resolve(runtime.profilePath):new URL('./profile.json',import.meta.url),'utf8'));
 config.mode='live';
 const root=resolve(runtime.runtimeRoot);await mkdir(root,{recursive:true});
+runtime.localStickers=await createLocalStickers({root:runtime.localStickerRoot||join(root,'..','stickers')});
 const reading=await ReadingMemory.open(join(root,'reading','reading-state.json'),{groupId:config.groupId});
 const baseKnowledge=await loadTextbooks(runtime);
 const groupLibrary=await createGroupLibrary(runtime,baseKnowledge);const knowledge=groupLibrary.knowledge;

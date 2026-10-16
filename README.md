@@ -12,7 +12,7 @@ This repository is a GitHub fork of **gl813788-byte/codex-qq-bot**. Its generic 
 | --- | --- |
 | Knowledge | Recursive PDF ingestion; content hashes and deduplication; native text and resumable OCR; chapter/definition/theorem-aware bilingual retrieval; original page images |
 | QQ | Receive allowlisted group messages, answer mentions, selectively join discussions, read quoted messages and group files, import selected PDF textbooks |
-| Answers | gpt-6.1-sol with high reasoning; plain QQ text; mathematics and casual conversation use different persona instructions |
+| Answers | gpt-6.1-sol with high reasoning; plain QQ text; mathematics and casual conversation use different persona instructions; mocking reaction emoji are filtered and casual chat can use reviewed local cute stickers or friendly kaomoji |
 | Media and web | Image understanding, public web search/read, image search and delivery, scoped group-resource reads |
 | Bilibili | QR login and encrypted session storage; search, recommendation feed, related videos, subtitles, media download, sampled frames, local speech recognition, multi-step interest exploration, optional likes/comments and QQ sharing |
 | Academic browsing | arXiv and Crossref journal discovery, public HTML/PDF reading, scope labels, evidence-checked curation and deduplicated QQ recommendations |
@@ -68,6 +68,8 @@ The explorer combines interests, recommendations, searches and related videos. I
 Comments and shares have separate budgets, account/scope checks, persisted receipts and duplicate protection. Uncertain sends are not blindly repeated. QQ questions can interrupt background exploration. These controls do not guarantee that an external platform will keep an account logged in.
 
 The Zhihu read-only official API adapter remains disabled by default. There is no claim of a verified Zhihu browser-login flow, arbitrary multi-platform browser automation or universal account support.
+
+Local expression policy and the optional reviewed cute-sticker catalog are described in [Local stickers](docs/LOCAL_STICKERS.md). Actual QQ image assets remain private.
 
 See [local operations](docs/ASSISTANT_OPERATIONS.md) for optional Windows supervision and protected QQ password recovery.
 

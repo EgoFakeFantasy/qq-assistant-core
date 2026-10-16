@@ -2,6 +2,7 @@ import {mkdtemp} from 'node:fs/promises';
 import {join} from 'node:path';
 import {publicQuery} from './public-fetch.mjs';
 import {formatQQReply} from './response-format.mjs';
+import {applyExpressionPolicy} from './expression-policy.mjs';
 import {openAutonomyStore,autonomyDay,autonomyCode,platformBlocked} from './autonomy-store.mjs';
 const broadInterests=['集合论','动画','游戏','音乐','生活日常'];
 function queries(values){return [...new Set((values||[]).slice(0,4).flatMap(q=>{try{return [publicQuery(q).slice(0,80)];}catch{return [];}}))];}
@@ -71,7 +72,7 @@ export class BilibiliExplorer{
    try{const r=await this.#site.like(evidence.video,{signal});await this.#record(v,'like',{...r,phase:r.verified&&r.liked?'verified':'submitted'});}catch(e){await this.#actionFailure(v,'like',e);}
   }
   if(c.commentsEnabled&&!s.actionPauses.comment&&review.commentWorthwhile&&review.interestScore>=0.65&&s.comments<c.maxCommentsPerDay&&review.evidenceTimes.length&&this.#mayWrite(v,'comment')){
-   const text=String(review.comment||'').trim();
+   const text=applyExpressionPolicy(String(review.comment||'')).trim();
    if(text.length>=6&&text.length<=320&&!/[\r\n]|https?:\/\/|@|看完全部|完整看完/.test(text)){
     signal?.throwIfAborted();s.phase='posting';s.comments++;await this.#record(v,'comment',{phase:'sending'});
     try{const r=await this.#site.comment(evidence.video,text,{signal});await this.#record(v,'comment',{...r,phase:'submitted'});try{const check=await this.#site.verifyComment(r,{signal});await this.#record(v,'comment',{...v.comment,phase:check.verified?'verified':'submitted',verified:check.verified===true});}catch(e){v.comment.readbackReason=autonomyCode(e);await this.#save();}}
