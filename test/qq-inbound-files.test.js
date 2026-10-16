@@ -127,7 +127,7 @@ test("downloads a selected QQ file into the task input directory with a bounded 
     assert.equal(saved.bytes, 5);
     assert.equal(await readFile(saved.path, "utf8"), "hello");
     assert.equal((await readdir(root)).length, 1);
-    assert.ok(saved.path.startsWith(`${root}/file-1-`));
+    assert.ok(saved.path.startsWith(join(root, "file-1-")));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

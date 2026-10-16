@@ -52,7 +52,7 @@ export async function writeResponseBodyToFile(response, filePath, {
       limiter,
       createWriteStream(temporaryPath, { flags: "wx", mode })
     );
-    const handle = await open(temporaryPath, "r");
+    const handle = await open(temporaryPath, "r+");
     try {
       await handle.sync();
     } finally {

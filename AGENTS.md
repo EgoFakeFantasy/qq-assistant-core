@@ -45,3 +45,11 @@ This repository runs a local Hub between QQ/OneBot and a local agent CLI (Codex 
 - Keep Chinese and English documentation structurally equivalent when behavior changes.
 - When deployment, QQ bridge or operator behavior changes, update both `skills/codex-qq-bot/SKILL.md` and the installed operational copy when it exists and is in scope.
 - Commands in public documentation must work from the repository. Prefer `npm run ncc -- <command>` over assuming a global `ncc`, because a machine may already have a different NapCat controller with the same name.
+
+
+## This research-assistant fork
+
+- Start with the root README.md / README_CN.md for this fork. Its public entry points initialize private operator configuration and run the set-theory profile; legacy upstream ncc/runtime paths are retained for provenance and do not describe this deployment.
+- Keep textbooks, extracted indexes, credentials, QR codes, chat logs, private acceptance reports and local audit records out of Git. Use only synthetic fixtures in published tests.
+- Run npm run verify, the synthetic PDF tests and npm run audit:public for core changes. The legacy test tree has a separate test:upstream entry point.
+- Preserve upstream attribution and licensing status; do not assign a blanket license to inherited code.

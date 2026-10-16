@@ -46,6 +46,8 @@ export function runCodexAppServerTurn({
   killGraceMs,
   replacementIdleTimeoutMs,
   signal,
+  prepareSession,
+  codexArgs = [],
   spawnProcess = spawn,
   onSpawn,
   onReady,
@@ -65,7 +67,7 @@ export function runCodexAppServerTurn({
 
     let child;
     try {
-      child = spawnProcess(codexPath, ["app-server", "--stdio"], {
+      child = spawnProcess(codexPath, ["app-server", "--stdio", ...codexArgs], {
         cwd,
         env,
         stdio: ["pipe", "pipe", "pipe"]
@@ -437,6 +439,7 @@ export function runCodexAppServerTurn({
           }
         });
         send({ method: "initialized", params: {} });
+        if (typeof prepareSession === "function") await prepareSession({ request });
         let thread;
         const existingThreadId = String(requestedThreadId || "").trim();
         if (existingThreadId) {

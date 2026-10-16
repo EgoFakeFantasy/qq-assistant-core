@@ -1,29 +1,14 @@
 {
-  "name": "codex-qq-bot",
-  "version": "1.2.0",
-  "private": false,
-  "description": "把 QQ 接到本机 Codex 或 Claude Code 的机器人，附中文一键安装器",
+  "name": "qq-assistant-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "QQ research assistant core: private textbook retrieval, autonomous Bilibili exploration and scoped platform accounts",
   "type": "module",
-  "bin": {
-    "codex-qq-bot": "bin/codex-qq-bot.mjs"
-  },
-  "files": [
-    "bin/",
-    "install.sh",
-    "一键部署.command",
-    "scripts/bootstrap-environment.sh",
-    "scripts/deploy.command",
-    "scripts/install-environment.sh",
-    "scripts/install-npm.sh",
-    "scripts/ncc.command",
-    "scripts/prepare-environment.sh",
-    "scripts/termux-proot.command"
-  ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gl813788-byte/codex-qq-bot.git"
+    "url": "git+https://github.com/EgoFakeFantasy/qq-assistant-core.git"
   },
-  "homepage": "https://github.com/gl813788-byte/codex-qq-bot#readme",
+  "homepage": "https://github.com/EgoFakeFantasy/qq-assistant-core#readme",
   "keywords": [
     "codex",
     "claude-code",
@@ -31,19 +16,25 @@
     "onebot",
     "napcat"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
-    "start": "node src/server.js",
-    "deploy": "zsh scripts/deploy.command",
-    "ncc": "zsh scripts/ncc.command",
-    "check": "node scripts/check.mjs",
-    "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage",
-    "verify": "npm run check && npm test"
+    "init": "node scripts/init-assistant.mjs",
+    "start": "node profiles/set-theory/offline-demo.mjs",
+    "start:live": "node profiles/set-theory/start-live.mjs --live --config private/live-config.json",
+    "accounts": "node profiles/set-theory/start-account-panel.mjs",
+    "accounts:token": "node scripts/account-token.mjs",
+    "health": "node deployment/runtime-health.mjs",
+    "check": "node scripts/check-core.mjs",
+    "test": "node scripts/run-core-tests.mjs",
+    "test:core": "node scripts/run-core-tests.mjs",
+    "test:upstream": "node --test test",
+    "verify": "npm run check && npm run test:core",
+    "verify:knowledge": "python -m unittest discover -s tools -p test_*.py",
+    "audit:public": "node scripts/audit-public.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
+  },
+  "dependencies": {
+    "qrcode": "1.5.4"
   }
 }

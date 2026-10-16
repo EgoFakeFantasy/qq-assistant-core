@@ -1,3 +1,4 @@
+import { isAbsolute } from "node:path";
 const obsoleteControlPattern = /\[\[(?:qq_command|qq_menu|qq_done|qq_progress|qq_task_budget|qq_task_continue)(?::[^\]\n]*)?\]\]/gi;
 const legacyReplyTargetPattern = /\[\[qq_reply:[^\]\n]+\]\]/gi;
 
@@ -133,7 +134,7 @@ function normalizeQqId(value) {
 
 function normalizeAbsoluteMarkerPath(value) {
   const path = String(value || "").trim();
-  if (!path.startsWith("/") || /[\r\n\]]/.test(path)) return "";
+  if (!isAbsolute(path) || /^(?:\\\\|\/\/)/.test(path) || /[\r\n\]]/.test(path)) return "";
   return path;
 }
 

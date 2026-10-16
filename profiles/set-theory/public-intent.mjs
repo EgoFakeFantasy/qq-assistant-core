@@ -1,0 +1,4 @@
+// Outbound keywords must come from an explicit command in the current human message.
+// Neither model output, chat history, quotes nor document contents can supply them.
+export function publicIntent(question){const s=String(question).trim();const web=s.match(/^\/(?:联网|网页搜索|web)\s+([^\n]{1,180})$/i)||s.match(/^(?:请|帮我|麻烦)?\s*(?:联网搜索|网上搜索|网络搜索|搜索网页)\s*[：:]?\s*([^\n]{1,180})$/);if(web)return {kind:'web',query:web[1].trim()};const image=s.match(/^\/(?:搜图|image)\s+([^\n]{1,180})$/i)||s.match(/^(?:请|帮我|麻烦)?\s*(?:搜图|找图片|找张图片)\s*[：:]?\s*([^\n]{1,180})$/);const natural=s.match(/^(?:请|帮我|麻烦)?\s*找(?:一|两)?张\s*([^\n]{1,120}?)\s*(?:的)?(?:图片|图像|照片|示意图)(?:并(?:发|发送)(?:给我)?)?$/);return image||natural?{kind:'image',query:(image||natural)[1].trim()}:null;}
+export function authorizedQuery(intent,kind,proposed){if(!intent||intent.kind!==kind||proposed!=null&&String(proposed).trim()!==intent.query)throw new Error('EXPLICIT_PUBLIC_KEYWORDS_REQUIRED');return intent.query;}

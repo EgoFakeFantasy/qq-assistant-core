@@ -1,0 +1,23 @@
+{
+  "runtimeRoot": "/absolute/path/to/qq-assistant-core/private/runtime",
+  "profilePath": "/absolute/path/to/qq-assistant-core/private/profile.json",
+  "corpusRoot": "/absolute/path/to/qq-assistant-core/private/knowledge/corpus",
+  "indexPath": "/absolute/path/to/qq-assistant-core/private/knowledge/pages.json",
+  "pythonPath": "python",
+  "codexPath": "codex",
+  "authHome": "/absolute/path/to/your/.codex",
+  "isolatedHome": "/absolute/path/to/qq-assistant-core/private/model-home",
+  "oneBotBase": "http://127.0.0.1:3000/",
+  "oneBotToken": "GENERATE_WITH_NPM_RUN_INIT",
+  "hubToken": "GENERATE_WITH_NPM_RUN_INIT",
+  "webuiToken": "GENERATE_WITH_NPM_RUN_INIT",
+  "hubPort": 3789,
+  "platformPanelPort": 3791,
+  "bilibiliUid": "YOUR_BILIBILI_UID",
+  "videoRuntime": {
+    "ffmpegPath": "/absolute/path/to/ffmpeg",
+    "ffprobePath": "/absolute/path/to/ffprobe",
+    "whisperPath": "/absolute/path/to/whisper-cli",
+    "whisperModelPath": "/absolute/path/to/ggml-base.bin"
+  }
+}

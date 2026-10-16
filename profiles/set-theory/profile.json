@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "mode": "offline",
+  "groupId": "1000000001",
+  "botId": "2000000002",
+  "ownerId": null,
+  "model": "gpt-6.1-sol",
+  "reasoningEffort": "high",
+  "automaticApiFallback": false,
+  "automaticModelDowngrade": false,
+  "maxQueue": 32,
+  "dailyModelCalls": null,
+  "perUserIntervalMs": 60000,
+  "proactiveIntervalMs": 60000,
+  "contextMessages": 40,
+  "maxInputChars": 12000,
+  "modelTimeoutMs": 1500000,
+  "autonomousPublicSearch": true,
+  "autonomousGroupTextbookImport": true,
+  "allowedGroupIds": [
+    "1000000001"
+  ],
+  "additionalGroups": [],
+  "workerConcurrency": 3,
+  "perGroupConcurrency": 2,
+  "optionalConcurrency": 1,
+  "autonomousBilibili": {
+    "enabled": false,
+    "targetGroupId": "1000000001",
+    "intervalMs": 7200000,
+    "maxSharesPerDay": 2,
+    "maxCommentsPerDay": 1,
+    "commentsEnabled": false,
+    "interestScope": "broad"
+  }
+}

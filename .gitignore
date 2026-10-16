@@ -53,3 +53,21 @@ modules/system-control/bin/
 config/local.codexremotecontact.chat-hub.plist
 config/local.gpt-qq-bot.chat-hub.plist
 /guild*.db*
+
+# Assistant private material and generated artifacts
+private/
+corpus/
+knowledge/
+.venv/
+__pycache__/
+*.pyc
+*.pdf
+*.dpapi
+*.sqlite*
+*.zip
+*.7z
+*.mp4
+*.wav
+auth.json
+cookies.txt
+qrcode.png

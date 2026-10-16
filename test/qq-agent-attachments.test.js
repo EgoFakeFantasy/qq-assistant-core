@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, readdir, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import test from "node:test";
 import {
   materializeCodexGeneratedImageAttachments,
@@ -49,7 +49,7 @@ test("imports a current-thread Codex generated image while preserving a valid ou
   assert.equal(parsed.rejectedGeneratedImageCount, 0);
   const importedImage = parsed.value.attachments[0].path;
   assert.notEqual(importedImage, generatedImage);
-  assert.equal(importedImage.startsWith(`${outputDir}/`), true);
+  assert.equal(importedImage.startsWith(`${outputDir}${sep}`), true);
   assert.equal(importedImage.endsWith(".png"), true);
   assert.match(parsed.output, new RegExp(`\\[\\[qq_image:${escapeRegExp(importedImage)}\\]\\]`));
   assert.match(parsed.output, /\[\[qq_file:.*report\.txt\|报告\.txt\]\]/);

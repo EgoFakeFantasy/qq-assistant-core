@@ -11,6 +11,8 @@ description: |
 
 # Codex QQ Bot maintenance
 
+For this research-assistant fork, use the root README.md / README_CN.md and profiles/set-theory/. Initialize private/live-config.json and private/profile.json with npm run init. The upstream machine-specific paths and ncc examples below are legacy reference, not this fork's deployment defaults. Never operate on another running checkout while preparing a public release.
+
 This project connects QQ/NapCat/OneBot to a local agent CLI: Codex (default)
 or Claude Code, chosen at startup. Treat it as a stateful local service: source
 code may change, but user configuration, runtime data, login state, secrets,
