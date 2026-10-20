@@ -290,3 +290,8 @@ Never paste real secrets into issues, screenshots, chat transcripts or Git diffs
 3. Extend `test/environment-config.test.js`.
 4. Update both languages and the maintenance skill.
 5. Run `npm run verify`.
+
+
+## Research-assistant memory and named persona
+
+The private profilePath remains authoritative. secondaryPersona uses enabled, name, argonMinRemaining, canary and activationMode; this edition defaults to disabled with mentioned-name activation. Never overwrite an operator profile from the public example. Per-group replyPolicy is adaptive or mentions-only. Memory storage is per group; persona candidates are never loaded. See LONG_TERM_MEMORY.md and SECONDARY_PERSONA.md.

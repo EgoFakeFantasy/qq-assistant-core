@@ -53,3 +53,7 @@ This repository runs a local Hub between QQ/OneBot and a local agent CLI (Codex 
 - Keep textbooks, extracted indexes, credentials, QR codes, chat logs, private acceptance reports and local audit records out of Git. Use only synthetic fixtures in published tests.
 - Run npm run verify, the synthetic PDF tests and npm run audit:public for core changes. The legacy test tree has a separate test:upstream entry point.
 - Preserve upstream attribution and licensing status; do not assign a blanket license to inherited code.
+
+## Memory and persona release boundaries
+
+Keep memory member/group scoped, evidence-backed and untrusted. Candidates never apply automatically. Retain the operator private profilePath and current mention/name routing. Publish synthetic fixtures only; no real events, candidate state or replay artifacts. Automatic QQ password recovery and Gemini web automation are excluded from this edition.

@@ -490,3 +490,8 @@ For the assistant profile, use docs/AUTONOMY.md and docs/AUTONOMY_CN.md. Bilibil
 Bilibili likes/comments are separate explicit profile switches. A like requires account/video checks and readback; do not undo existing likes. Keep the durable action ledger when trimming history and never automatically replay uncertain external writes. The model may continue exploring or decline any social action. Scholarly recommendations must retain preprint/journal attribution, actual reading scope, matching support quotes and DOI/title deduplication.
 
 When deploying, verify all question/background activity is idle or checkpointed, replace only the affected Hub/panel, and preserve NapCat/QQ and platform sessions. Verify source discovery and actual reading separately from public delivery; mocks and a model proposal alone do not establish a QQ receipt. Keep all private state and downloaded reading material out of publication.
+
+
+## Scoped memory and accepted optional persona
+
+Use docs/LONG_TERM_MEMORY.md and docs/SECONDARY_PERSONA.md. Preserve private profilePath, current self-mention/name routing, and per-group replyPolicy. Ordinary definitions/tentative statements are unverified claims; weak legacy episodes remain stored but are withheld. Status contains bounded numeric quality counters only. Candidates never enter prompts or rewrite persona files. Replay only local sourced events, with no network/model/QQ writes. Publish source and synthetic fixtures only. This edition retires automatic QQ password login; use manual NapCat login and read-only health checks.

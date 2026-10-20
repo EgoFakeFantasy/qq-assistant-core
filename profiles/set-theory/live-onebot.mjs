@@ -1,13 +1,15 @@
+import {normalizeGroupReplyPolicy,hasDirectSelfMention} from './group-reply-policy.mjs';
 import {readFile} from 'node:fs/promises';
 import {formatQQReply} from './response-format.mjs';
 import {normalizeReplyPresentation,planReply,makeReplyNodes,forwardReference,parseForwardRecords,forwardReplyText} from './reply-layout.mjs';
-export function createLiveOneBot({ baseUrl, token, groupId, botId, allowProactive = false, replyPresentation, fetchFn = fetch }) {
+export function createLiveOneBot({ baseUrl, token, groupId, botId, allowProactive = false, replyPolicy, replyPresentation, fetchFn = fetch }) {
   const base = new URL(baseUrl);
   if (!['http:', 'https:'].includes(base.protocol) || !['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname)
       || base.username || base.password || base.pathname !== '/' || base.search || base.hash) throw new Error('LOOPBACK_ONEBOT_REQUIRED');
   if (typeof token !== 'string' || token.length < 24) throw new Error('ONEBOT_TOKEN_REQUIRED');
+  const policy=normalizeGroupReplyPolicy(replyPolicy);
   const presentation=normalizeReplyPresentation(replyPresentation);let botNickname='QQ assistant';
-  const diagnostics = {replyPresentation:presentation,forwardSends:0,forwardReadbacks:0,forwardVerificationFailures:0, online: false, memberOfGroup: false, sends: 0, failedSends: 0, checkedAt: null, quoteReads:0, quoteMisses:0 };
+  const diagnostics = {replyPolicy:policy,replyPresentation:presentation,forwardSends:0,forwardReadbacks:0,forwardVerificationFailures:0, online: false, memberOfGroup: false, sends: 0, failedSends: 0, checkedAt: null, quoteReads:0, quoteMisses:0 };
   async function call(action, params = {}, timeoutMs=2500) {
     const response = await fetchFn(new URL(action, base), { method: 'POST',
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
@@ -67,7 +69,7 @@ async function imageSegments(images){if(!Array.isArray(images)||images.length>2)
   async function messageMedia(messageId){if(!/^-?\d{1,20}$/.test(String(messageId)))return {images:[],files:[]};const m=await call('get_msg',{message_id:Number(messageId)},12000);if(m.message_type!=='group'||String(m.group_id)!==groupId)throw new Error('ONEBOT_SCOPE');let segments=m.message||[];if(forwardReference(m)&&String(m.sender?.user_id||m.user_id)===botId){segments=(await ownForwardRecords(m)).flatMap(r=>r.segments);}return {images:segments.filter(s=>s.type==='image').map(s=>({file:String(s.data?.file||''),url:String(s.data?.url||'')})).slice(0,3),files:(m.message||[]).filter(s=>s.type==='file').map(s=>({fileId:String(s.data?.file_id||s.data?.id||''),name:String(s.data?.name||'')})).slice(0,2)};}
   async function imageUrl(ref){if(ref.url){const u=new URL(ref.url);if(['https:','http:'].includes(u.protocol)&&/(?:^|\.)(?:qq\.com|qpic\.cn|gtimg\.cn)$/.test(u.hostname))return u.href;}if(!/^[A-Za-z0-9_.-]{1,180}$/.test(ref.file||''))throw new Error('INVALID_IMAGE_REFERENCE');const data=await call('get_image',{file:ref.file},15000);const u=new URL(data.url||'');if(!['https:','http:'].includes(u.protocol))throw new Error('IMAGE_URL_MISSING');return u.href;}
   return { kind: 'live', diagnostics, check, async sendProactive(message){
-    if(!allowProactive||message.groupId!==groupId||typeof message.text!=='string'||message.text.length>1800)throw Error('PROACTIVE_GROUP_SCOPE');
+    if(policy==='mentions-only'||!allowProactive||message.groupId!==groupId||typeof message.text!=='string'||message.text.length>1800)throw Error('PROACTIVE_GROUP_SCOPE');
     const text=formatQQReply(message.text);if(!text)throw Error('EMPTY_PLAIN_TEXT');
     const plan=planReply(text,presentation);await check();if(!diagnostics.memberOfGroup)throw Error('BOT_NOT_IN_GROUP');
     try{
@@ -90,6 +92,11 @@ async function imageSegments(images){if(!Array.isArray(images)||images.length>2)
     }catch{diagnostics.quoteMisses++;return null;}
   }, async send(message) {
     if(message.groupId!==groupId||typeof message.text!=='string'||!message.text.trim())throw Error('ONEBOT_SCOPE');
+    if(policy==='mentions-only'){
+      const id=String(message.replyTo);if(!/^-?\d{1,20}$/.test(id)||!Number.isSafeInteger(Number(id)))throw Error('MENTION_REQUIRED');
+      const original=await call('get_msg',{message_id:Number(id)});
+      if(original.message_type!=='group'||String(original.group_id)!==groupId||(original.message_id!=null&&String(original.message_id)!==id)||String(original.sender?.user_id||original.user_id)===botId||!hasDirectSelfMention(original.message,botId))throw Error('MENTION_REQUIRED');
+    }
     const text=formatQQReply(message.text);if(!text)throw Error('EMPTY_PLAIN_TEXT');
     const plan=planReply(text,presentation);
     const images=await imageSegments(message.images||[]);

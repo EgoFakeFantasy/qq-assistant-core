@@ -17,6 +17,7 @@ export class QuestionWorkerPool {
   }
 
   runBackground(groupId, task) {
+    if(this.#scopes.some(scope=>scope.config.groupId===groupId&&scope.config.replyPolicy==='mentions-only'))return null;
     if (this.#paused || this.#active.size >= this.#limit || this.#active.has('background:'+groupId) ||
         [...this.#active.values()].filter(job=>!job.mandatory).length >= this.#optional ||
         [...this.#active.values()].filter(job=>job.groupId===groupId).length >= this.#perGroup ||

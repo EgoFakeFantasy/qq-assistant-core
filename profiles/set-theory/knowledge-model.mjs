@@ -1,9 +1,14 @@
+import {createPersonaRouter} from './persona-router.mjs';
+import {createAntigravityClient} from './antigravity-cli.mjs';
 import {createBudgetedModelCaller} from './model-rate-backoff.mjs';
 import {publicIntent} from './public-intent.mjs';
 import {createResourceSession,resourceTools} from './resource-session.mjs';
 import {createKnowledgeTools} from './knowledge-tools.mjs';import {createLiveModel} from './live-model.mjs';import {createPublicSearch} from './public-search.mjs';import {choosePublicTopics,needsPublicLookup} from './public-topics.mjs';
 export function createKnowledgeModel(runtime){
- const main=createLiveModel({...runtime,knowledgeProtocol:Boolean(runtime.knowledge)});const search=createPublicSearch(runtime);let questionTurns=0,requests=0,rateLimitRetries=0;
+ const primary=createLiveModel({...runtime,knowledgeProtocol:Boolean(runtime.knowledge)});
+ const enabled=runtime.secondaryPersona?.enabled||Boolean(runtime.secondaryPersona?.canary);
+ const secondary=enabled&&runtime.antigravity?createAntigravityClient({...runtime.antigravity,prepareImages:runtime.prepareImages,knowledgeProtocol:Boolean(runtime.knowledge)}):null;
+ const main=createPersonaRouter({primary,secondary,settings:runtime.secondaryPersona,readPrimaryQuota:runtime.readPrimaryQuota,readSecondaryQuota:()=>secondary.readQuota()});const search=createPublicSearch(runtime);let questionTurns=0,requests=0,rateLimitRetries=0;
  return {kind:'live',get diagnostics(){return {...main.diagnostics,knowledgeToolCalls:requests,questionTurns,rateLimitRetries,structuredKnowledgeResearchEnabled:Boolean(runtime.knowledge),webSearchEnabled:true,webSearchScope:runtime.resources?(runtime.autonomousPublicSearch?'autonomous-public-topics-and-pages':'explicit-public-keywords-and-pages'):'fixed-public-topics',autonomousGroupTextbookImport:Boolean(runtime.autonomousGroupTextbookImport),groupLibrary:runtime.groupLibrary?.diagnostics,groupFilesEnabled:Boolean(runtime.resources),visionEnabled:Boolean(runtime.resources),imageSearchAndSendEnabled:Boolean(runtime.resources),localStickers:runtime.localStickers?.diagnostics,groupResources:runtime.resources?.diagnostics,webResources:runtime.webResources?.diagnostics,publicSearch:search.diagnostics};},async generate(request,options={}){
   await runtime.groupLibrary?.refresh();questionTurns++;let evidence=null;if(!runtime.resources&&needsPublicLookup(request.question,request.sources)){try{evidence=await search.lookup(choosePublicTopics(request.question),options);}catch{}}
   if(!runtime.knowledge){const answer=await main.generate({...request,publicWebEvidence:evidence},options);if(answer.webSources?.some(s=>!evidence?.sources.some(p=>p.url===s.url)))throw new Error('UNVERIFIED_WEB_SOURCE');return answer;}
