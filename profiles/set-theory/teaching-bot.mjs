@@ -1,3 +1,5 @@
+import {normalizeGroupReplyPolicy} from './group-reply-policy.mjs';
+import {normalizeSecondary,secondaryForRequest,requestsGemini,explicitlyRequestsGemini,approvedAnswer,personaNotice} from './provider-policy.mjs';
 import {normalizeReplyPresentation} from './reply-layout.mjs';
 import {personaInstructions,conversationMode,PERSONA_VERSION} from './persona.mjs';
 import {formatQQReply,formatWebSources,cleanBotHistory} from './response-format.mjs';
@@ -27,17 +29,18 @@ export function validateProfile(config) {
     if (!Number.isSafeInteger(config[key]) || config[key] < 0) throw new Error(`INVALID_${key}`);
   }
   for(const [key,max] of [['workerConcurrency',6],['perGroupConcurrency',3],['optionalConcurrency',2]])if(config[key]!==undefined&&(!Number.isInteger(config[key])||config[key]<1||config[key]>max))throw Error('INVALID_'+key);
-  return Object.freeze({ ...config, replyPresentation:normalizeReplyPresentation(config.replyPresentation) });
+  return Object.freeze({ ...config, replyPolicy:normalizeGroupReplyPolicy(config.replyPolicy), replyPresentation:normalizeReplyPresentation(config.replyPresentation), secondaryPersona:normalizeSecondary(config.secondaryPersona) });
 }
 
 export class TeachingBot {
   #config; #model; #transport; #knowledge; #root; #now; #sleep; #dedupe;
   #queue = []; #context = []; #lastUser = new Map(); #lastProactive = -Infinity;
   #day = ''; #calls = 0; #draining = null; #receipts = [];
+  #personaSeen = {}; #personaTail = Promise.resolve();
   #resources = null;
-  #reading = null;
+  #reading = null; #memory = null; #memoryErrors = 0;
   #store = null; #activeJobs = new Map(); #running = new Map(); #seen = new Map(); #faulted = false;
-  constructor({ config, model, transport, knowledge, resources=null, reading=null, runtimeRoot, now = Date.now,
+  constructor({ config, model, transport, knowledge, resources=null, reading=null, memory=null, runtimeRoot, now = Date.now,
     sleep = ms => new Promise(r => setTimeout(r, ms)) }) {
     this.#config = validateProfile(config);
     const requiredKind = config.mode === 'live' ? 'live' : 'mock';
@@ -45,7 +48,7 @@ export class TeachingBot {
         typeof transport.send !== 'function') throw new Error('LIVE_ADAPTER_NOT_APPROVED');
     this.#model = model; this.#transport = transport; this.#knowledge = knowledge;
     this.#resources=resources;
-    this.#reading=reading;
+    this.#reading=reading;this.#memory=memory;
     this.#root = resolve(runtimeRoot); this.#now = now; this.#sleep = sleep;
     this.#dedupe = createOneBotEventDeduplicator({ now });
   }
@@ -57,7 +60,7 @@ export class TeachingBot {
       validateTeachingState(state,{groupId:bot.#config.groupId,botId:bot.#config.botId});
       bot.#queue = state.queue; bot.#context = cleanBotHistory(state.context,bot.#config.botId); bot.#seen = new Map(state.seen);
       bot.#lastUser = new Map(state.lastUser); bot.#day = state.day; bot.#calls = state.calls;
-      bot.#lastProactive = state.lastProactive ?? -Infinity; bot.#receipts = state.receipts;
+      bot.#lastProactive = state.lastProactive ?? -Infinity; bot.#receipts = state.receipts; bot.#personaSeen = state.personaSeen||{};
       for(const active of state.activeJobs||(state.active?[state.active]:[])){
         if(active.phase==='generating'&&!state.receipts.some(r=>r.eventId===active.job.event.raw.message_id&&r.delivered))bot.#queue.unshift(active.job);
         if(active.phase==='sending'&&!state.receipts.some(r=>r.eventId===active.job.event.raw.message_id&&r.delivered))bot.#receipts.push({eventId:active.job.event.raw.message_id,status:'delivery_uncertain_after_restart',delivered:false});
@@ -72,18 +75,19 @@ export class TeachingBot {
     const state = { version:2, groupId:this.#config.groupId, botId:this.#config.botId,
       queue:this.#queue, active:[...this.#activeJobs.values()][0]||null, activeJobs:[...this.#activeJobs.values()], context:this.#context, seen:[...this.#seen],
       lastUser:[...this.#lastUser], day:this.#day, calls:this.#calls,
-      lastProactive:Number.isFinite(this.#lastProactive) ? this.#lastProactive : null, receipts:this.#receipts };
+      lastProactive:Number.isFinite(this.#lastProactive) ? this.#lastProactive : null, receipts:this.#receipts, personaSeen:this.#personaSeen };
     try { await this.#store.save(state); } catch (error) { this.#faulted = true; throw error; }
   }
   get diagnostics() {
-    return { queued: this.#queue.length, active: this.#activeJobs.size>0, activeCount:this.#activeJobs.size, modelCalls: this.#calls, receipts: structuredClone(this.#receipts), contextMessages: this.#context.length, storageFaulted:this.#faulted, personaVersion:PERSONA_VERSION, reading:this.#reading?.diagnostics||null };
+    return { replyPolicy:this.#config.replyPolicy, autonomousTopicsEnabled:this.#config.replyPolicy!=='mentions-only', queued: this.#queue.length, active: this.#activeJobs.size>0, activeCount:this.#activeJobs.size, modelCalls: this.#calls, receipts: structuredClone(this.#receipts), contextMessages: this.#context.length, storageFaulted:this.#faulted, personaVersion:PERSONA_VERSION, secondaryPersona:this.#config.secondaryPersona, reading:this.#reading?.diagnostics||null, longTermMemory:this.#memory?{...this.#memory.diagnostics,errors:this.#memoryErrors}:null };
   }
   async rememberProactive(text) {
     if(this.#faulted)throw Error('STORAGE_UNAVAILABLE');
     text=formatQQReply(text);if(!text)throw Error('EMPTY_PLAIN_TEXT');
     this.#context.push({senderId:this.#config.botId,text:text.slice(0,2000)});this.#context=this.#context.slice(-this.#config.contextMessages);await this.#checkpoint();
   }
-  async #send(event, text, status, images=[]) {
+  async #send(event, text, status, images=[], identity=null) {
+    if(this.#config.replyPolicy==='mentions-only'&&!event.hasSelfAtSegment)return {eventId:String(event.raw.message_id),status:'mention_required',delivered:false};
     // QQ renders text literally; never expose Markdown bold delimiters.
     text = formatQQReply(text);
     if (!text) throw new Error("EMPTY_PLAIN_TEXT");
@@ -99,6 +103,7 @@ export class TeachingBot {
       receipt = { eventId: String(event.raw.message_id), status, delivered: result?.ok === true && Boolean(result.messageId), replyId:result?.messageId?String(result.messageId):null, ...(result?.deliveryMode==='forward'?{deliveryMode:'forward',forwardId:result.forwardId||null,verified:result.verified===true,nodeCount:result.nodeCount}: {}) };
     } catch { receipt = { eventId: String(event.raw.message_id), status, delivered: false }; }
     finally { clearTimeout(timer); }
+    if(identity?.personaId==='gemini')Object.assign(receipt,{personaId:'gemini',provider:identity.provider,model:identity.model,reasoningEffort:identity.reasoningEffort,routeReason:identity.routeReason});
     // Do not retry an uncertain write: a timeout may have happened after delivery.
     if (receipt.delivered) { this.#context.push({ senderId: this.#config.botId, text: text.slice(0, 2000) }); this.#context = this.#context.slice(-this.#config.contextMessages); }
     this.#receipts.push(receipt);
@@ -109,9 +114,18 @@ export class TeachingBot {
   async #error(event, code) {
     const messages = {INPUT_TOO_LARGE:'消息过长，请分段提问。',QUEUE_FULL:'当前排队已满，请稍后重新提问。',
       DAILY_BUDGET:'今天助教已达到部署者设置的推理调用上限，请稍后再试或联系部署者。',
+      SECONDARY_NOT_ENABLED:'回（Gemini）尚未启用，这条点名消息没有转交给 GPT。',
+      SECONDARY_NOT_READY:'回（Gemini）的工作位暂时未连接，这条消息没有转交给 GPT。',
+      AGY_TOOL_PERMISSION_DENIED:'回（Gemini）读取本题资料被本地权限拦住了，本次已停止；需要管理员处理后再试。',
+      SECONDARY_QUOTA_EXHAUSTED:'Gemini 和 Argon 的当前可用额度也已用完，请稍后再试。',
+      SECONDARY_QUOTA_UNAVAILABLE:'暂时无法确认 Antigravity 的可用额度，本次没有启动备用模型。',
       EMPTY_ANSWER:'本次未能形成有效答案，请换一种说法重试。',
       MODEL_OR_RETRIEVAL_FAILURE:'本次回答未完成，可能是模型连接、检索或超时问题，请稍后重试。'};
     return this.#send(event, `${messages[code] || '服务暂不可用，请稍后重试。'}（${code}）`, 'service_error');
+  }
+  async #remember(event,options){
+    if(!this.#memory)return;
+    try{await this.#memory.observeHuman(event,options);}catch{this.#memoryErrors++;}
   }
   async ingest(payload) {
     if (this.#faulted) throw new Error('STORAGE_UNAVAILABLE');
@@ -120,6 +134,7 @@ export class TeachingBot {
         !/^\d{4,20}$/.test(String(payload.user_id)) || payload.message_id == null || String(payload.message_id).length > 128) return { status: 'ignored' };
     const normalized = normalizeOneBotEvent(payload);
     const event = {groupId:normalized.groupId,senderId:normalized.senderId,text:normalized.text,
+      at:Number.isFinite(payload.time)?payload.time*1000:this.#now(),
       officialRobotMarker:normalized.officialRobotMarker,hasSelfAtSegment:normalized.hasSelfAtSegment,hasAtSegment:normalized.hasAtSegment,
       replyTo:Array.isArray(payload.message)?payload.message.find(s=>s.type==='reply'&&/^-?\d{1,20}$/.test(String(s.data?.id)))?.data?.id:null,
       files:normalized.files.map(() => ({unread:true})),images:Array.isArray(payload.message)?payload.message.filter(s=>s.type==='image').slice(0,3).map(()=>({unread:true})):[],raw:{message_id:String(payload.message_id)}};
@@ -130,7 +145,14 @@ export class TeachingBot {
     if (this.#dedupe.remember(key)) return { status: 'duplicate' };
     if (this.#seen.size >= 10000) this.#seen.delete(this.#seen.keys().next().value);
     this.#seen.set(key, this.#now());
-    const mandatory = event.hasSelfAtSegment;
+    const routeSettings=secondaryForRequest(this.#config.secondaryPersona,{groupId:event.groupId,question:event.text,hasSelfAt:event.hasSelfAtSegment},this.#now());
+    event.memoryPersona=requestsGemini(event.text,routeSettings,{hasSelfAt:event.hasSelfAtSegment})?'hui':'axu';
+    await this.#remember(event,{persona:event.memoryPersona});
+    if(this.#config.replyPolicy==='mentions-only'&&!event.hasSelfAtSegment){
+      this.#context.push({senderId:event.senderId,text:event.text.slice(0,2000)});this.#context=this.#context.slice(-this.#config.contextMessages);await this.#checkpoint();return {status:'context_only'};
+    }
+    const explicitGemini=requestsGemini(event.text,routeSettings,{hasSelfAt:event.hasSelfAtSegment})&&!(event.hasAtSegment&&!event.hasSelfAtSegment);
+    const mandatory = event.hasSelfAtSegment||explicitGemini;
     if (event.text.length > this.#config.maxInputChars) {
       if (mandatory) await this.#error(event, 'INPUT_TOO_LARGE');
       return { status: 'rejected' };
@@ -177,6 +199,7 @@ export class TeachingBot {
   }
   async #runJob(job){
       const {event,mandatory,context}=job;
+      if(this.#config.replyPolicy==='mentions-only'&&!event.hasSelfAtSegment){await this.#checkpoint();return;}
       const delay = Math.max(0, (this.#lastUser.get(event.senderId) ?? -Infinity) + this.#config.perUserIntervalMs - this.#now());
       if (delay) await this.#sleep(delay);
       if(this.#reading){
@@ -209,11 +232,15 @@ export class TeachingBot {
         const recommendation=wantsReading(readingText);
         let sources = mode === 'mathematics'||recommendation ? this.#knowledge.search(readingText, { limit: 4, maxCharacters: 16000 }) : [];
         if(recommendation&&this.#reading)sources=this.#reading.rank(sources,event.senderId);
+        const routeSettings=secondaryForRequest(this.#config.secondaryPersona,{groupId:event.groupId,question:event.text,hasSelfAt:event.hasSelfAtSegment},this.#now());
         const request = {
+          groupId:event.groupId,hasSelfAt:event.hasSelfAtSegment,
+          requestedPersona:requestsGemini(event.text,routeSettings,{hasSelfAt:event.hasSelfAtSegment})?'gemini':null,
           model: MODEL, reasoningEffort: EFFORT, billingRoute: 'chatgpt-plan',
           developerInstructions: personaInstructions, conversationMode: mode, context:cleanBotHistory(context,this.#config.botId), quotedMessage, question: event.text, sources,
           messageId:String(event.raw.message_id),hasMedia:Boolean(event.images.length||event.files.length),quotedMessageId:event.replyTo?String(event.replyTo):null,
           mandatory, cwd: workspace, tools: [], shellAccess: false, attachments: [],
+          memoryContext:this.#memory?.context({userId:event.senderId,question:readingText,excludeMessageId:String(event.raw.message_id)})||null,
           attachmentNotice: null, readingContext:this.#reading?.context(event.senderId)||null, recommendationRequested:recommendation
         };
         await writeFile(join(workspace, 'request.json'), JSON.stringify(request, null, 2), { flag: 'wx', mode: 0o600 });
@@ -221,7 +248,7 @@ export class TeachingBot {
           this.#model.generate(structuredClone(request), { signal: abort.signal, onAdditionalModelCall:async()=>{const currentDay=new Date(this.#now()).toISOString().slice(0,10);if(currentDay!==this.#day){this.#day=currentDay;this.#calls=0;}if(this.#config.dailyModelCalls!==null&&this.#calls>=this.#config.dailyModelCalls)throw new Error('DAILY_BUDGET');this.#calls++;await this.#checkpoint();} }),
           new Promise((_, reject) => { timer = setTimeout(() => { abort.abort(); reject(new Error('TIMEOUT')); }, this.#config.modelTimeoutMs); })
         ]);
-        if (answer?.model !== MODEL || answer?.reasoningEffort !== EFFORT || answer?.billingRoute !== 'chatgpt-plan') throw new Error('MODEL_CONTRACT');
+        if (!approvedAnswer(answer,routeSettings)) throw new Error('MODEL_CONTRACT');
         if (answer.status === 'silent') {
           if (mandatory) await this.#error(event, 'EMPTY_ANSWER');
           return;
@@ -238,11 +265,22 @@ export class TeachingBot {
         const supplied=answer.resolvedSources||sources;
         const recorded=this.#reading?await this.#reading.observe({sources:supplied,citations:answer.citations,knowledgeTrace:answer.knowledgeTrace||[],messageId:event.raw.message_id,userId:event.senderId,recommendation}):[];
         const feedback=recorded.length?'资料编号：'+recorded.map(x=>x.id).join('、')+'；可用 /反馈 有帮助、已经会了、不感兴趣 或 意外收获。':'';
-        const receipt=await this.#send(event, [answer.text, references, webReferences, feedback, request.attachmentNotice,...(answer.outgoingImages||[]).filter(i=>i.kind!=='local-sticker').map(i=>`图片：${i.title}；来源：${i.sourceUrl}；作者：${i.author||'见来源页面'}；许可：${i.license||'见来源页面'}`)].filter(Boolean).join('\n\n'), 'answer',answer.outgoingImages||[]);
+        const body=[answer.text, references, webReferences, feedback, request.attachmentNotice,...(answer.outgoingImages||[]).filter(i=>i.kind!=='local-sticker').map(i=>`图片：${i.title}；来源：${i.sourceUrl}；作者：${i.author||'见来源页面'}；许可：${i.license||'见来源页面'}`)].filter(Boolean).join('\n\n');
+        const deliver=async()=>{
+          if(answer.personaId!=='gemini')return this.#send(event,body,'answer',answer.outgoingImages||[]);
+          const intro=personaNotice(answer,this.#config.secondaryPersona,this.#personaSeen);
+          const label='【'+this.#config.secondaryPersona.name+' · '+(answer.model==='gemini-4-argon-high'?'Gemini 4 Argon':'Gemini 3.8 Flash')+'】';
+          const result=await this.#send(event,[label,intro,body].filter(Boolean).join('\n\n'),'answer',answer.outgoingImages||[],answer);
+          if(result.delivered){this.#personaSeen={...this.#personaSeen,gemini:true,...(answer.routeReason==='codex-exhausted'?{quotaEpoch:answer.quotaEpoch||'quota-error'}:{})};await this.#checkpoint();}
+          return result;
+        };
+        let receipt;
+        if(answer.personaId==='gemini'){const pending=this.#personaTail.then(deliver,deliver);this.#personaTail=pending.catch(()=>{});receipt=await pending;}else receipt=await deliver();
+        if(receipt.delivered)await this.#remember(event,{proposals:answer.memoryCandidates||[],persona:answer.personaId==='gemini'?'hui':'axu'});
         if(this.#reading&&receipt.delivered)await this.#reading.observe({sources:supplied,citations:answer.citations,knowledgeTrace:answer.knowledgeTrace||[],messageId:event.raw.message_id,userId:event.senderId,recommendation,delivered:true,replyId:receipt.replyId});
       } catch (error) {
         // No backend error text, path, prompt or credentials leak to the group.
-        if (mandatory) await this.#error(event, error?.message==='DAILY_BUDGET'?'DAILY_BUDGET':'MODEL_OR_RETRIEVAL_FAILURE');
+        if (mandatory) await this.#error(event, ['DAILY_BUDGET','SECONDARY_NOT_ENABLED','SECONDARY_NOT_READY','SECONDARY_QUOTA_EXHAUSTED','SECONDARY_QUOTA_UNAVAILABLE','AGY_TOOL_PERMISSION_DENIED'].includes(error?.message)?error.message:'MODEL_OR_RETRIEVAL_FAILURE');
       } finally { clearTimeout(timer);  await this.#checkpoint(); }
   }
 }

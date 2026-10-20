@@ -294,3 +294,8 @@ npm run ncc -- status
 3. 补充 `test/environment-config.test.js`。
 4. 同步本页中英文版本和维护 Skill。
 5. 运行 `npm run verify`。
+
+
+## 研究助手记忆与称呼路由
+
+私有 profilePath 是运行配置依据。secondaryPersona 包含 enabled、name、argonMinRemaining、canary、activationMode；本版默认关闭且采用 mentioned-name。不得用公开示例覆盖现有私有人格。每群 replyPolicy 为 adaptive 或 mentions-only。记忆按群存储；人格候选不被加载。见 LONG_TERM_MEMORY_CN.md 与 SECONDARY_PERSONA_CN.md。

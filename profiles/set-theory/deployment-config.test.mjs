@@ -54,3 +54,12 @@ test('configured non-example bot receives and persists a mention only in its own
   assert.equal(state.botId,config.botId);assert.equal(state.groupId,config.groupId);assert.equal(state.receipts.length,1);
  }finally{await hub.close();}
 });
+
+test('custom bot and group scoped memory survive an entire Hub restart',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'custom-memory-restart-'));
+ const base=JSON.parse(await readFile(new URL('./profile.json',import.meta.url),'utf8'));
+ const config={...base,mode:'offline',botId:'2888888888',groupId:'1888888888',allowedGroupIds:['1888888888'],additionalGroups:[]};
+ const options={config,runtimeRoot:root,token:'x'.repeat(32),autoDrain:false,knowledge:createKnowledgeBase(),model:{kind:'mock',generate:async()=>{throw Error('NO_MODEL_ALLOWED');}},transport:{kind:'mock',send:async()=>{throw Error('NO_QQ_ALLOWED');}}};
+ const first=await createTeachingHub(options);await first.close();
+ const second=await createTeachingHub(options);try{assert.equal(second.bot.diagnostics.longTermMemory.faulted,false);assert.equal(second.bot.diagnostics.longTermMemory.autoApply,false);}finally{await second.close();}
+});

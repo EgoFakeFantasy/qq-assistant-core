@@ -1,6 +1,6 @@
 {
   "name": "qq-assistant-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "QQ research assistant core: private textbook retrieval, autonomous Bilibili exploration and scoped platform accounts",
   "type": "module",
@@ -29,7 +29,8 @@
     "test:upstream": "node --test test",
     "verify": "npm run check && npm run test:core",
     "verify:knowledge": "python -m unittest discover -s tools -p test_*.py",
-    "audit:public": "node scripts/audit-public.mjs"
+    "audit:public": "node scripts/audit-public.mjs",
+    "replay:memory": "node scripts/replay-memory.mjs"
   },
   "engines": {
     "node": ">=22"

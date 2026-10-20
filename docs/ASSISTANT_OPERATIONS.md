@@ -1,24 +1,10 @@
 # Local operations
 
-## QQ login and supervision
+## QQ login and health
 
-The included Windows supervisor starts missing Hub/account-panel processes when the computer is on AC power and the Windows user has an interactive session. If you want it to start NapCat's Node launcher as well, set napcatNodePath and napcatEntryPath in private/live-config.json to your separately installed launcher executable and index.js. Its working directory remains the launcher's directory. Do not run two independent NapCat stacks for the same account and ports.
+QQ login is an operator action in NapCat. Automatic password login, credential collection and scheduled recovery scripts are retired from this edition. Existing private installations are not changed by this source release.
 
-Optional password recovery uses the configured QQ account only:
-
-```powershell
-powershell.exe -NoProfile -File deployment/store-qq-credential.ps1
-powershell.exe -NoProfile -File deployment/supervise-runtime.ps1 -Once
-powershell.exe -NoProfile -File deployment/install-supervisor.ps1
-```
-
-The first command prompts securely in the local terminal; do not paste passwords into QQ. The third installs a limited-privilege, interactive-user scheduled task checking every minute. These scripts are not executed by npm install, tests or cloning the repository.
-
-Passwords are protected with Windows DPAPI CurrentUser; recovery passes only the required password representation through an anonymous stdin pipe to a fixed loopback WebUI API. The recovery state contains sanitized phases and retry times, never the password, its digest, challenge URLs or QR contents.
-
-Recovery verifies the actual logged-in account. It prefers an eligible saved session, otherwise uses the protected password, and observes a mutex, exponential backoff, a failure limit and verification pauses. It does not repeatedly restart QQ, reset device identifiers or bypass pending verification. A CAPTCHA, phone confirmation or QR scan can still require operator action. There is no permanent-login guarantee.
-
-npm run health distinguishes the Hub, OneBot, native QQ login, allowlisted group membership and Hub scope refresh. A running process or a successful WebUI panel login alone does not prove that the bot is online.
+npm run health distinguishes panel authentication, actual OneBot online status, account identity, group membership and Hub readiness. A panel login or process alone is not QQ online evidence.
 
 ## Moving the deployment
 

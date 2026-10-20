@@ -73,7 +73,7 @@ Windows 下运行 npm run accounts，另开终端运行 npm run accounts:token �
 
 本地可爱表情的审核目录和选择规则见[表情配置](docs/LOCAL_STICKERS_CN.md)。实际 QQ 表情素材保持私有。
 
-可选的 Windows 守护和 QQ 加密密码恢复见[本机运维](docs/ASSISTANT_OPERATIONS_CN.md)。
+QQ 手动登录与只读健康检查见[本机运维](docs/ASSISTANT_OPERATIONS_CN.md)；本版不包含 QQ 自动密码恢复。
 
 ## 自主阅读论文
 
@@ -81,12 +81,16 @@ Windows 下运行 npm run accounts，另开终端运行 npm run accounts:token �
 
 B站与学术阅读轮流使用同一个后台工作位，群问答可以抢占。共享 Codex 额度仍适用；自主阅读使用同样的 gpt-6.1-sol/high。详细配置、实际阅读范围和动作回执见 [自主浏览说明](docs/AUTONOMY_CN.md)。
 
+## 长期记忆与可选回人格
+
+已接入同群长期记忆、成员偏好隔离、暂定说法与纠错区分，以及只生成不生效的人格候选。支持纯本地历史回放，不额外调用模型或向群发送消息。见[长期记忆](docs/LONG_TERM_MEMORY_CN.md)。可选[回人格](docs/SECONDARY_PERSONA_CN.md)默认关闭；开启后使用当前真实 @ 加明确称呼路由。
+
 ## 目录
 
 - profiles/set-theory/：助理、检索、人格、并发、资料工具、账号保险库、B 站自主浏览。
 - src/app/teaching-hub.js：经过鉴权的本地 Hub 与多群组合。
 - tools/import_library.py：可迁移的私有 PDF/OCR 导入器。
-- deployment/：Windows OCR 与有退避和验证暂停的 QQ 恢复工具。
+- deployment/：Windows OCR 与只读 QQ 健康检查。
 - scripts/：私有配置初始化、本机操作命令和验证。
 - docs/upstream/：原始项目入口文档。其他继承文件保留用于来源追溯；本助理使用本文的启动入口。
 

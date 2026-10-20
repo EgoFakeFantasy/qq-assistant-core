@@ -1,3 +1,5 @@
+import {LongTermMemory} from '../../profiles/set-theory/long-term-memory.mjs';
+import {PERSONA_VERSION} from '../../profiles/set-theory/persona.mjs';
 import {QuestionWorkerPool} from '../../profiles/set-theory/question-worker-pool.mjs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
@@ -10,14 +12,16 @@ import { LocalDurableState } from '../../profiles/set-theory/local-durable-state
 
 // Isolated application composition using the production Hub HTTP adapter.
 // No fallback into legacy commands, other groups, model selection, or tools.
-export async function createTeachingHub({ config, model, transport, knowledge, resources=null, reading=null, runtimeRoot, token, autoDrain = true, additionalScopes = [], backgroundStatus = () => null, runAutonomousBrowse = null, scholarStatus = () => null, runAutonomousScholar = null }) {
+export async function createTeachingHub({ config, model, transport, knowledge, resources=null, reading=null, memory=null, runtimeRoot, token, autoDrain = true, additionalScopes = [], backgroundStatus = () => null, runAutonomousBrowse = null, scholarStatus = () => null, runAutonomousScholar = null }) {
   if (typeof token !== 'string' || token.length < 24) throw new Error('AUTH_TOKEN_REQUIRED');
-  const bot = await TeachingBot.open({ config, model, transport, knowledge, resources, reading,
+  memory ||= await LongTermMemory.open(join(runtimeRoot,'long-term-memory'),{groupId:config.groupId,botId:config.botId,personaVersion:PERSONA_VERSION});
+  const bot = await TeachingBot.open({ config, model, transport, knowledge, resources, reading, memory,
     runtimeRoot: join(runtimeRoot, 'turns'), store: new LocalDurableState(join(runtimeRoot, 'state'),{groupId:config.groupId,botId:config.botId}) });
   const scopes=new Map([[config.groupId,{config,bot,model,transport,knowledge}]]);
   for(const scope of additionalScopes){
     if(!config.allowedGroupIds?.includes(scope.config.groupId)||scopes.has(scope.config.groupId)||scope.config.botId!==config.botId)throw Error('UNAPPROVED_GROUP_SCOPE');
-    const scopedBot=await TeachingBot.open({...scope,runtimeRoot:join(scope.runtimeRoot,'turns'),store:new LocalDurableState(join(scope.runtimeRoot,'state'),{groupId:scope.config.groupId,botId:scope.config.botId})});
+    const scopedMemory=scope.memory||await LongTermMemory.open(join(scope.runtimeRoot,'long-term-memory'),{groupId:scope.config.groupId,botId:scope.config.botId,personaVersion:PERSONA_VERSION});
+    const scopedBot=await TeachingBot.open({...scope,memory:scopedMemory,runtimeRoot:join(scope.runtimeRoot,'turns'),store:new LocalDurableState(join(scope.runtimeRoot,'state'),{groupId:scope.config.groupId,botId:scope.config.botId})});
     scopes.set(scope.config.groupId,{...scope,bot:scopedBot});
   }
   const controller = new AbortController();
@@ -33,10 +37,10 @@ export async function createTeachingHub({ config, model, transport, knowledge, r
     const d = bot.diagnostics;
     const groups=[...scopes.values()].map(s=>({groupId:s.config.groupId,name:s.config.groupName||null,...s.bot.diagnostics,receipts:undefined,transport:s.transport.diagnostics||null,indexedPages:s.knowledge.pageCount}));
     return { profile: 'set-theory', mode: config.mode, liveEnabled: config.mode === 'live', model: config.model,
-      personaVersion: d.personaVersion, indexedPages: knowledge.pageCount, textbookCount: knowledge.catalog?.length || 0,
-      dailyModelCallLimit: config.dailyModelCalls, proactiveIntervalMs: config.proactiveIntervalMs, longReplyForwardingEnabled:true, replyPresentation:transport.diagnostics?.replyPresentation||config.replyPresentation||null, plainTextFilteringEnabled: true, cannedDisclaimerFilteringEnabled:true, autonomousTopicsEnabled:true, quotedTextReadingEnabled:typeof transport.readQuote==='function',
+      personaVersion: d.personaVersion, secondaryPersona:d.secondaryPersona, indexedPages: knowledge.pageCount, textbookCount: knowledge.catalog?.length || 0,
+      dailyModelCallLimit: config.dailyModelCalls, proactiveIntervalMs: config.proactiveIntervalMs, longReplyForwardingEnabled:true, replyPresentation:transport.diagnostics?.replyPresentation||config.replyPresentation||null, plainTextFilteringEnabled: true, cannedDisclaimerFilteringEnabled:true, autonomousTopicsEnabled:config.replyPolicy!=='mentions-only', quotedTextReadingEnabled:typeof transport.readQuote==='function',
       reasoningEffort: config.reasoningEffort, groupId: config.groupId, botId: config.botId,
-      queued: groups.reduce((n,g)=>n+g.queued,0), active:workers.diagnostics.active, bilibiliExplorer:backgroundStatus(), scholarExplorer:scholarStatus(), workers:workers.diagnostics, groups, allowedGroupIds:[...scopes.keys()], modelCalls:groups.reduce((n,g)=>n+g.modelCalls,0), storageFaulted:groups.some(g=>g.storageFaulted), reading:d.reading,
+      queued: groups.reduce((n,g)=>n+g.queued,0), active:workers.diagnostics.active, bilibiliExplorer:backgroundStatus(), scholarExplorer:scholarStatus(), workers:workers.diagnostics, groups, allowedGroupIds:[...scopes.keys()], modelCalls:groups.reduce((n,g)=>n+g.modelCalls,0), storageFaulted:groups.some(g=>g.storageFaulted), reading:d.reading, longTermMemory:d.longTermMemory,
       receiptCount: [...scopes.values()].reduce((n,s)=>n+s.bot.diagnostics.receipts.length,0), closing };
   }
   const server = createHubHttpServer({

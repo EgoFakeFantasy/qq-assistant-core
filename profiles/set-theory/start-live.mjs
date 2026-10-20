@@ -1,3 +1,6 @@
+import {configForAdditionalGroup} from './group-reply-policy.mjs';
+import {createPlanQuotaReader} from './plan-quota.mjs';
+import {normalizeSecondary} from './provider-policy.mjs';
 import {createLocalStickers} from './local-stickers.mjs';
 import {createScholarRuntime} from './scholar-runtime.mjs';
 import {createBackgroundScheduler} from './background-scheduler.mjs';
@@ -23,6 +26,7 @@ const at=args.indexOf('--config');if(at<0||!args[at+1])throw new Error('Private 
 const runtime=JSON.parse(await readFile(resolve(args[at+1]),'utf8'));
 const config=JSON.parse(await readFile(runtime.profilePath?resolve(runtime.profilePath):new URL('./profile.json',import.meta.url),'utf8'));
 config.mode='live';
+runtime.secondaryPersona=normalizeSecondary(config.secondaryPersona);if(runtime.secondaryPersona.enabled||runtime.secondaryPersona.canary)runtime.readPrimaryQuota=createPlanQuotaReader(runtime);
 const root=resolve(runtime.runtimeRoot);await mkdir(root,{recursive:true});
 runtime.localStickers=await createLocalStickers({root:runtime.localStickerRoot||join(root,'..','stickers')});
 const reading=await ReadingMemory.open(join(root,'reading','reading-state.json'),{groupId:config.groupId});
@@ -30,7 +34,7 @@ const baseKnowledge=await loadTextbooks(runtime);
 const groupLibrary=await createGroupLibrary(runtime,baseKnowledge);const knowledge=groupLibrary.knowledge;
 runtime.autonomousPublicSearch=config.autonomousPublicSearch===true;runtime.autonomousGroupTextbookImport=config.autonomousGroupTextbookImport===true;
 
-const transport=createLiveOneBot({baseUrl:runtime.oneBotBase,token:runtime.oneBotToken,groupId:config.groupId,botId:config.botId,replyPresentation:config.replyPresentation,allowProactive:true});
+const transport=createLiveOneBot({baseUrl:runtime.oneBotBase,token:runtime.oneBotToken,groupId:config.groupId,botId:config.botId,replyPresentation:config.replyPresentation,replyPolicy:config.replyPolicy,allowProactive:true});
 const platformVault=createWindowsVault(join(root,'..','credentials','platforms'));
 const platformAccounts=createPlatformAccounts({vault:platformVault,expectedUid:runtime.bilibiliUid});
 const resources=createGroupResources({...runtime,transport});const webResources=createWebResources();
@@ -58,16 +62,16 @@ if(operation==='--probe-model'){
   const shutdown=async()=>{for(const library of additionalLibraries)library.close();groupLibrary.close();clearInterval(timer);scheduler?.close();if(hub)await hub.close();await unlink(lock).catch(()=>{});};
   try{
     for(const group of config.additionalGroups||[]){
-      if(!config.allowedGroupIds?.includes(group.groupId)||group.groupId===config.groupId)throw Error('UNAPPROVED_ADDITIONAL_GROUP');
+      const scopedConfig=configForAdditionalGroup(config,group);
       const scopedRoot=join(root,'groups',group.groupId);await mkdir(scopedRoot,{recursive:true});
       const scopedRuntime={...runtime,runtimeRoot:scopedRoot};
       const scopedLibrary=await createGroupLibrary(scopedRuntime,baseKnowledge);additionalLibraries.push(scopedLibrary);
       const scopedKnowledge=scopedLibrary.knowledge;
-      const scopedTransport=createLiveOneBot({baseUrl:runtime.oneBotBase,token:runtime.oneBotToken,groupId:group.groupId,botId:config.botId,replyPresentation:config.replyPresentation});
+      const scopedTransport=createLiveOneBot({baseUrl:runtime.oneBotBase,token:runtime.oneBotToken,groupId:group.groupId,botId:config.botId,replyPresentation:config.replyPresentation,replyPolicy:scopedConfig.replyPolicy});
       const scopedResources=createGroupResources({...scopedRuntime,transport:scopedTransport});
       const scopedReading=await ReadingMemory.open(join(scopedRoot,'reading','reading-state.json'),{groupId:group.groupId});
       const scopedModel=createKnowledgeModel({...scopedRuntime,knowledge:scopedKnowledge,groupLibrary:scopedLibrary,resources:scopedResources,webResources:createWebResources(),platformAccounts,prepareImages:scopedKnowledge.prepareImages});
-      additionalScopes.push({config:{...config,groupId:group.groupId,groupName:group.name},model:scopedModel,transport:scopedTransport,knowledge:scopedKnowledge,resources:scopedResources,reading:scopedReading,runtimeRoot:scopedRoot});
+      additionalScopes.push({config:scopedConfig,model:scopedModel,transport:scopedTransport,knowledge:scopedKnowledge,resources:scopedResources,reading:scopedReading,runtimeRoot:scopedRoot});
     }
     hub=await createTeachingHub({config,model,transport,knowledge,resources,reading,runtimeRoot:root,token:runtime.hubToken,additionalScopes,backgroundStatus:()=>explorer?.diagnostics||null,runAutonomousBrowse:()=>scheduler?.run('bilibili',{manual:true})||null,scholarStatus:()=>scholar?.diagnostics||null,runAutonomousScholar:()=>scheduler?.run('scholar',{manual:true})||null});
     explorer=await createBilibiliRuntime({runtime,config,vault:platformVault,transport,onShare:text=>hub.bot.rememberProactive(text)});

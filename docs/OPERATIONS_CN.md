@@ -314,4 +314,4 @@ npm run verify
 
 ### Windows 管理密钥恢复
 
-Windows 健康检查及保存密码的恢复器共用 deployment/napcat-webui-auth.mjs。旧 WebUI 密钥被拒绝时，自动读取本机 NapCat webui.json 中的当前密钥并重试一次，不打印或另行保存密钥。自定义布局可在私有运行配置中设置 napcatWebuiConfigPath；否则由 napcatEntryPath 或打包的 napcat-node 布局推导。网络故障不触发密钥猜测。这只恢复本机面板认证，腾讯 QQ 会话仍沿用既有快速登录、加密密码、互斥、退避和人工验证暂停。完成登录后继续核对实际账号和 OneBot 群成员关系。
+健康检查使用 deployment/napcat-webui-auth.mjs 读取本机 NapCat 面板凭据；只做面板认证与状态查询，不发起 QQ 登录。本版不包含 QQ 密码恢复或自动登录计划任务。

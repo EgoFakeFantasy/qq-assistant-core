@@ -308,4 +308,4 @@ The default remains `127.0.0.1`. Enable LAN only on explicit request:
 
 ### Windows management-token recovery
 
-The Windows health and saved-password recovery scripts use deployment/napcat-webui-auth.mjs. If a saved WebUI token is rejected, authentication reads the current token from the local NapCat webui.json and retries once without printing or persisting it. Set napcatWebuiConfigPath in private runtime configuration for a custom layout; otherwise the path is derived from napcatEntryPath or the packaged napcat-node layout. Network failures do not trigger token guessing. This renews local panel authentication, not the Tencent QQ session: existing quick login, encrypted password, mutex, backoff and human-challenge pauses stay unchanged. Check the actual account and OneBot group membership after any login.
+Health checks use deployment/napcat-webui-auth.mjs for local panel authentication and status reads only. They never initiate a QQ login. QQ password recovery and automatic-login scheduled tasks are excluded from this edition.
