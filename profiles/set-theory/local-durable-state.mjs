@@ -1,3 +1,4 @@
+import {validateAttention} from '../../src/domain/cognition/attention.js';
 import { mkdir, realpath, lstat, readFile, open, rename, unlink } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -10,6 +11,7 @@ export function validateTeachingState(state,{groupId='1000000001',botId='2000000
   if (!state || ![1,2].includes(state.version) || state.groupId !== groupId || !/^\d{4,20}$/.test(groupId) || state.botId !== botId || !/^\d{4,20}$/.test(botId) ||
       !Number.isSafeInteger(state.calls) || state.calls < 0 || state.calls > Number.MAX_SAFE_INTEGER ||
       typeof state.day !== 'string' || !/^(?:|\d{4}-\d{2}-\d{2})$/.test(state.day)) throw new Error('INVALID_STATE');
+  if(state.attention!==undefined)validateAttention(state.attention);
   for (const [key, limit] of [['queue',256],['context',200],['seen',10000],['lastUser',10000],['receipts',200]]) {
     if (!Array.isArray(state[key]) || state[key].length > limit) throw new Error('INVALID_STATE_' + key);
   }

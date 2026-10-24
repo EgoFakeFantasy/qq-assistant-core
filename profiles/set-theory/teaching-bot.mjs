@@ -1,3 +1,4 @@
+import {initialAttention,validateAttention,attentionDecision,attentionReply} from '../../src/domain/cognition/attention.js';
 import {normalizeReplyPresentation} from './reply-layout.mjs';
 import {personaInstructions,conversationMode,PERSONA_VERSION} from './persona.mjs';
 import {formatQQReply,formatWebSources,cleanBotHistory} from './response-format.mjs';
@@ -15,6 +16,7 @@ const question = /[?？]|怎么|为何|为什么|如何|解释|证明|什么|哪
 const management = /^\/(?:admin|owner|model|effort|shell|exec|config|管理|模型|权限|执行|设置)(?:\s|$)/i;
 
 export function validateProfile(config) {
+  if(config.attention!==undefined&&(!config.attention||typeof config.attention.enabled!=='boolean'))throw Error('INVALID_ATTENTION_CONFIG');
   if(config.allowedGroupIds!==undefined&&(!Array.isArray(config.allowedGroupIds)||config.allowedGroupIds.length>16||!config.allowedGroupIds.includes(config.groupId)||config.allowedGroupIds.some(id=>typeof id!=='string'||!/^\d{4,20}$/.test(id))))throw new Error('INVALID_ALLOWED_GROUPS');
   if (!['offline', 'live'].includes(config.mode) || !(config.allowedGroupIds || [config.groupId]).includes(config.groupId) || !/^\d{4,20}$/.test(config.groupId||'') || typeof config.botId!=='string' || !/^\d{4,20}$/.test(config.botId) ||
       config.model !== MODEL || config.reasoningEffort !== EFFORT || config.automaticApiFallback !== false ||
@@ -36,6 +38,7 @@ export class TeachingBot {
   #day = ''; #calls = 0; #draining = null; #receipts = [];
   #resources = null;
   #reading = null;
+  #attention=initialAttention();
   #store = null; #activeJobs = new Map(); #running = new Map(); #seen = new Map(); #faulted = false;
   constructor({ config, model, transport, knowledge, resources=null, reading=null, runtimeRoot, now = Date.now,
     sleep = ms => new Promise(r => setTimeout(r, ms)) }) {
@@ -57,6 +60,7 @@ export class TeachingBot {
       validateTeachingState(state,{groupId:bot.#config.groupId,botId:bot.#config.botId});
       bot.#queue = state.queue; bot.#context = cleanBotHistory(state.context,bot.#config.botId); bot.#seen = new Map(state.seen);
       bot.#lastUser = new Map(state.lastUser); bot.#day = state.day; bot.#calls = state.calls;
+      bot.#attention=state.attention?validateAttention(state.attention):initialAttention();
       bot.#lastProactive = state.lastProactive ?? -Infinity; bot.#receipts = state.receipts;
       for(const active of state.activeJobs||(state.active?[state.active]:[])){
         if(active.phase==='generating'&&!state.receipts.some(r=>r.eventId===active.job.event.raw.message_id&&r.delivered))bot.#queue.unshift(active.job);
@@ -72,11 +76,11 @@ export class TeachingBot {
     const state = { version:2, groupId:this.#config.groupId, botId:this.#config.botId,
       queue:this.#queue, active:[...this.#activeJobs.values()][0]||null, activeJobs:[...this.#activeJobs.values()], context:this.#context, seen:[...this.#seen],
       lastUser:[...this.#lastUser], day:this.#day, calls:this.#calls,
-      lastProactive:Number.isFinite(this.#lastProactive) ? this.#lastProactive : null, receipts:this.#receipts };
+      attention:this.#attention, lastProactive:Number.isFinite(this.#lastProactive) ? this.#lastProactive : null, receipts:this.#receipts };
     try { await this.#store.save(state); } catch (error) { this.#faulted = true; throw error; }
   }
   get diagnostics() {
-    return { queued: this.#queue.length, active: this.#activeJobs.size>0, activeCount:this.#activeJobs.size, modelCalls: this.#calls, receipts: structuredClone(this.#receipts), contextMessages: this.#context.length, storageFaulted:this.#faulted, personaVersion:PERSONA_VERSION, reading:this.#reading?.diagnostics||null };
+    return { attention:{enabled:this.#config.attention?.enabled===true,...this.#attention,recent:undefined,automatic:undefined}, queued: this.#queue.length, active: this.#activeJobs.size>0, activeCount:this.#activeJobs.size, modelCalls: this.#calls, receipts: structuredClone(this.#receipts), contextMessages: this.#context.length, storageFaulted:this.#faulted, personaVersion:PERSONA_VERSION, reading:this.#reading?.diagnostics||null };
   }
   async rememberProactive(text) {
     if(this.#faulted)throw Error('STORAGE_UNAVAILABLE');
@@ -99,6 +103,7 @@ export class TeachingBot {
       receipt = { eventId: String(event.raw.message_id), status, delivered: result?.ok === true && Boolean(result.messageId), replyId:result?.messageId?String(result.messageId):null, ...(result?.deliveryMode==='forward'?{deliveryMode:'forward',forwardId:result.forwardId||null,verified:result.verified===true,nodeCount:result.nodeCount}: {}) };
     } catch { receipt = { eventId: String(event.raw.message_id), status, delivered: false }; }
     finally { clearTimeout(timer); }
+    if(receipt?.delivered)this.#attention=attentionReply(this.#attention,{now:this.#now(),senderId:event.senderId,delivered:true});
     // Do not retry an uncertain write: a timeout may have happened after delivery.
     if (receipt.delivered) { this.#context.push({ senderId: this.#config.botId, text: text.slice(0, 2000) }); this.#context = this.#context.slice(-this.#config.contextMessages); }
     this.#receipts.push(receipt);
@@ -146,6 +151,7 @@ export class TeachingBot {
     const interest = topic.test(event.text) || event.text.replace(/\s/g,'').length>=6 || question.test(event.text) || addressed.test(event.text) || /帮我|请|推荐|查一下|找一下|有没有|你觉得|求助|建议/.test(event.text) || (recentTopic && event.text.length > 12);
     if (!mandatory && (!interest || (event.hasAtSegment && !event.hasSelfAtSegment) ||
         this.#now() - this.#lastProactive < this.#config.proactiveIntervalMs)) { await this.#checkpoint(); return { status: 'context_only' }; }
+    if(!mandatory&&this.#config.attention?.enabled===true){const gate=attentionDecision(this.#attention,{now:this.#now(),text:event.text,senderId:event.senderId,topic:topic.test(event.text),question:question.test(event.text),addressed:addressed.test(event.text),cooldownMs:this.#config.proactiveIntervalMs});this.#attention=gate.state;if(!gate.allow){await this.#checkpoint();return {status:'context_only',attentionReason:gate.reason};}}
     if (this.#queue.length >= this.#config.maxQueue) {
       if (mandatory) await this.#error(event, 'QUEUE_FULL');
       return { status: 'queue_full' };
