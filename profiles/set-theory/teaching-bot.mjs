@@ -10,10 +10,10 @@ import {wantsReading} from './reading-memory.mjs';
 
 export const MODEL = 'gpt-6.1-sol';
 export const EFFORT = 'high';
-const topic = /������|����|����|��β|�ɲ�|����|������|����|����|������|ѡ����|�ݼ�|ǿ��|����ͳ|Jech|����|\b(ZF|ZFC|ordinal|cardinal|cofinality|forcing|set theory)\b/i;
-const addressed = /����������|С����/;
-const question = /[?��]|��ô|Ϊ��|Ϊʲô|���|����|֤��|ʲô|��Щ|˭|����|�ܷ�|�ɷ�|�ܲ���|��ʲô|��ô��|what|why|how/i;
-const management = /^\/(?:admin|owner|model|effort|shell|exec|config|����|ģ��|Ȩ��|ִ��|����)(?:\s|$)/i;
+const topic = /集合论|序数|基数|共尾|可测|紧致|扩张子|良序|可数|不可数|选择公理|幂集|强迫|连续统|Jech|冯琦|\b(ZF|ZFC|ordinal|cardinal|cofinality|forcing|set theory)\b/i;
+const addressed = /集合论助手|小助手/;
+const question = /[?？]|怎么|为何|为什么|如何|解释|证明|什么|哪些|谁|哪里|能否|可否|能不能|有什么|怎么办|what|why|how/i;
+const management = /^\/(?:admin|owner|model|effort|shell|exec|config|管理|模型|权限|执行|设置)(?:\s|$)/i;
 
 export function validateProfile(config) {
   if(config.attention!==undefined&&(!config.attention||typeof config.attention.enabled!=='boolean'))throw Error('INVALID_ATTENTION_CONFIG');
@@ -112,11 +112,11 @@ export class TeachingBot {
     return receipt;
   }
   async #error(event, code) {
-    const messages = {INPUT_TOO_LARGE:'��Ϣ��������ֶ����ʡ�',QUEUE_FULL:'��ǰ�Ŷ����������Ժ��������ʡ�',
-      DAILY_BUDGET:'���������Ѵﵽ���������õ������������ޣ����Ժ����Ի���ϵ�����ߡ�',
-      EMPTY_ANSWER:'����δ���γ���Ч�𰸣��뻻һ��˵�����ԡ�',
-      MODEL_OR_RETRIEVAL_FAILURE:'���λش�δ��ɣ�������ģ�����ӡ�������ʱ���⣬���Ժ����ԡ�'};
-    return this.#send(event, `${messages[code] || '�����ݲ����ã����Ժ����ԡ�'}��${code}��`, 'service_error');
+    const messages = {INPUT_TOO_LARGE:'消息过长，请分段提问。',QUEUE_FULL:'当前排队已满，请稍后重新提问。',
+      DAILY_BUDGET:'今天助教已达到部署者设置的推理调用上限，请稍后再试或联系部署者。',
+      EMPTY_ANSWER:'本次未能形成有效答案，请换一种说法重试。',
+      MODEL_OR_RETRIEVAL_FAILURE:'本次回答未完成，可能是模型连接、检索或超时问题，请稍后重试。'};
+    return this.#send(event, `${messages[code] || '服务暂不可用，请稍后重试。'}（${code}）`, 'service_error');
   }
   async ingest(payload) {
     if (this.#faulted) throw new Error('STORAGE_UNAVAILABLE');
@@ -144,11 +144,11 @@ export class TeachingBot {
     this.#context.push({ senderId: event.senderId, text: event.text.slice(0, 2000) });
     this.#context = this.#context.slice(-this.#config.contextMessages);
     if (management.test(event.text.trim())) {
-      if (mandatory) await this.#send(event, '����������δ���ã��޷��޸�ģ�͡�Ȩ�޻�ִ�����', 'management_denied');
+      if (mandatory) await this.#send(event, '管理功能尚未配置，无法修改模型、权限或执行命令。', 'management_denied');
       return { status: 'management_denied' };
     }
     const recentTopic = this.#context.slice(-8).some(item => topic.test(item.text));
-    const interest = topic.test(event.text) || event.text.replace(/\s/g,'').length>=6 || question.test(event.text) || addressed.test(event.text) || /����|��|�Ƽ�|��һ��|��һ��|��û��|�����|����|����/.test(event.text) || (recentTopic && event.text.length > 12);
+    const interest = topic.test(event.text) || event.text.replace(/\s/g,'').length>=6 || question.test(event.text) || addressed.test(event.text) || /帮我|请|推荐|查一下|找一下|有没有|你觉得|求助|建议/.test(event.text) || (recentTopic && event.text.length > 12);
     if (!mandatory && (!interest || (event.hasAtSegment && !event.hasSelfAtSegment) ||
         this.#now() - this.#lastProactive < this.#config.proactiveIntervalMs)) { await this.#checkpoint(); return { status: 'context_only' }; }
     if(!mandatory&&this.#config.attention?.enabled===true){const gate=attentionDecision(this.#attention,{now:this.#now(),text:event.text,senderId:event.senderId,topic:topic.test(event.text),question:question.test(event.text),addressed:addressed.test(event.text),cooldownMs:this.#config.proactiveIntervalMs});this.#attention=gate.state;if(!gate.allow){await this.#checkpoint();return {status:'context_only',attentionReason:gate.reason};}}
@@ -188,10 +188,10 @@ export class TeachingBot {
       if(this.#reading){
         try{const reply=await this.#reading.command(event.text,{userId:event.senderId,messageId:event.raw.message_id,replyTo:event.replyTo});
           if(reply!==null){await this.#send(event,reply,'reading_command');await this.#checkpoint();return;}
-        }catch{if(mandatory)await this.#send(event,'�Ķ���¼��ʱ�޷����棬���Ժ����ԡ�','service_error');await this.#checkpoint();return;}
+        }catch{if(mandatory)await this.#send(event,'阅读记录暂时无法保存，请稍后重试。','service_error');await this.#checkpoint();return;}
       }
-      const fileCommand=event.text.trim().match(/^\/(?:��Ⱥ�ļ�|Ⱥ�ļ�|files)(?:\s+(.*))?$/i);
-      if(fileCommand&&this.#resources){try{const files=await this.#resources.list(fileCommand[1]||'');const text=files.length?`�ҵ�${files.length}��Ⱥ�ļ���\n`+files.slice(0,20).map((f,i)=>`${i+1}. ${f.name}\n��ţ�${f.id}��${(f.size/1048576).toFixed(2)} MB${f.folder?'��Ŀ¼��'+f.folder:''}`).join('\n')+(files.length>20?'\n����ʾǰ20���������ӹؼ��ʡ�':'')+'\n���� /��Ⱥ�ļ� ��� ��Nҳ �����Ķ���':'û���ҵ�ƥ���Ⱥ�ļ���';await this.#send(event,text,'file_search');}catch{await this.#send(event,'Ⱥ�ļ�Ŀ¼��ʱ�޷���ȡ�����Ժ����ԡ�','service_error');}finally{await this.#checkpoint();}return;}
+      const fileCommand=event.text.trim().match(/^\/(?:搜群文件|群文件|files)(?:\s+(.*))?$/i);
+      if(fileCommand&&this.#resources){try{const files=await this.#resources.list(fileCommand[1]||'');const text=files.length?`找到${files.length}个群文件：\n`+files.slice(0,20).map((f,i)=>`${i+1}. ${f.name}\n编号：${f.id}；${(f.size/1048576).toFixed(2)} MB${f.folder?'；目录：'+f.folder:''}`).join('\n')+(files.length>20?'\n仅显示前20个，请增加关键词。':'')+'\n可用 /读群文件 编号 第N页 继续阅读。':'没有找到匹配的群文件。';await this.#send(event,text,'file_search');}catch{await this.#send(event,'群文件目录暂时无法获取，请稍后重试。','service_error');}finally{await this.#checkpoint();}return;}
       const day = new Date(this.#now()).toISOString().slice(0, 10);
       if (day !== this.#day) { this.#day = day; this.#calls = 0; }
       if (this.#config.dailyModelCalls!==null && this.#calls >= this.#config.dailyModelCalls) {
@@ -238,13 +238,13 @@ export class TeachingBot {
         answer.citations = [...new Set([...answer.citations, ...inlineCitations])];
         if (answer.citations.some(id => !byId.has(id))) throw new Error('UNKNOWN_CITATION');
         const cited = [...new Set(answer.citations)].map(id => byId.get(id));
-        const references = cited.length ? cited.map((s,i) => `��${i+1}��${s.title}��${s.referenceKind==='document-section'?'���ݵ�':'PDF��'}${s.pdfPage}${s.referenceKind==='document-section'?'��':'ҳ'}`).join('\n') : '';
+        const references = cited.length ? cited.map((s,i) => `〔${i+1}〕${s.title}，${s.referenceKind==='document-section'?'内容第':'PDF第'}${s.pdfPage}${s.referenceKind==='document-section'?'段':'页'}`).join('\n') : '';
         const webReferences = formatWebSources(answer.webSources || []);
-        for (const [i, source] of cited.entries()) answer.text = answer.text.replace(new RegExp('\\[?' + source.citation + '\\]?', 'g'), `��${i+1}��`);
+        for (const [i, source] of cited.entries()) answer.text = answer.text.replace(new RegExp('\\[?' + source.citation + '\\]?', 'g'), `〔${i+1}〕`);
         const supplied=answer.resolvedSources||sources;
         const recorded=this.#reading?await this.#reading.observe({sources:supplied,citations:answer.citations,knowledgeTrace:answer.knowledgeTrace||[],messageId:event.raw.message_id,userId:event.senderId,recommendation}):[];
-        const feedback=recorded.length?'���ϱ�ţ�'+recorded.map(x=>x.id).join('��')+'������ /���� �а������Ѿ����ˡ�������Ȥ �� �����ջ�':'';
-        const receipt=await this.#send(event, [answer.text, references, webReferences, feedback, request.attachmentNotice,...(answer.outgoingImages||[]).filter(i=>i.kind!=='local-sticker').map(i=>`ͼƬ��${i.title}����Դ��${i.sourceUrl}�����ߣ�${i.author||'����Դҳ��'}�����ɣ�${i.license||'����Դҳ��'}`)].filter(Boolean).join('\n\n'), 'answer',answer.outgoingImages||[]);
+        const feedback=recorded.length?'资料编号：'+recorded.map(x=>x.id).join('、')+'；可用 /反馈 有帮助、已经会了、不感兴趣 或 意外收获。':'';
+        const receipt=await this.#send(event, [answer.text, references, webReferences, feedback, request.attachmentNotice,...(answer.outgoingImages||[]).filter(i=>i.kind!=='local-sticker').map(i=>`图片：${i.title}；来源：${i.sourceUrl}；作者：${i.author||'见来源页面'}；许可：${i.license||'见来源页面'}`)].filter(Boolean).join('\n\n'), 'answer',answer.outgoingImages||[]);
         if(this.#reading&&receipt.delivered)await this.#reading.observe({sources:supplied,citations:answer.citations,knowledgeTrace:answer.knowledgeTrace||[],messageId:event.raw.message_id,userId:event.senderId,recommendation,delivered:true,replyId:receipt.replyId});
       } catch (error) {
         // No backend error text, path, prompt or credentials leak to the group.

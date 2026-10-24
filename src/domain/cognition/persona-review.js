@@ -3,12 +3,12 @@ import {createHash} from 'node:crypto';
 // Only these operator-owned expressions can become reviewed overlays. Human
 // messages and generated prose are evidence, never executable prompt patches.
 export const styleThemes=Object.freeze({
- framing:'ֱ�ӻش𣬼��ٶ���ķ����Կ򶨣���Ӱ����۵ı�Ҫ���������˵��һ�Ρ�',
- followup:'���ٻ�е�Ľ�β���ʣ���ȷ�����ʱ��׷�ʡ�',
- opening:'����ֱ�ӻ�Ӧ�����ٹ̶����������ҽ������е��Ǹ��',
- repeat:'���⸴�����ظ��Ƽ������Ƚ����Ѿ����۹������ݡ�',
- format:'ά�ָɾ��Ĵ��ı����',
- length:'����������Ҫ����ƪ����������Ҫ������������'
+ framing:'直接回答，减少多余的防御性框定；把影响结论的必要条件随结论说明一次。',
+ followup:'减少机械的结尾反问，在确需澄清时再追问。',
+ opening:'开口直接回应，减少固定开场、自我介绍与机械道歉。',
+ repeat:'避免复述与重复推荐，优先接续已经讨论过的内容。',
+ format:'维持干净的纯文本表达。',
+ length:'根据任务需要调整篇幅，保留必要条件和推理。'
 });
 const terminal=new Set(['approved','rejected','rolled-back','superseded']);
 export const initialPersonaReview=()=>({version:1,revision:0,entries:[],audit:[]});
@@ -57,6 +57,6 @@ export function selectPersonaRequest(request,persona){
  if(memoryContexts)selected.memoryContext=memoryContexts[persona]||null;
  const themes=personaAdaptations?.[persona];
  const instructions=Array.isArray(themes)?[...new Set(themes.slice(0,2).map(p=>Object.hasOwn(styleThemes,p?.theme)?styleThemes[p.theme]:null).filter(Boolean))]:[];
- if(instructions.length)selected.developerInstructions=(selected.developerInstructions||'')+'\n��ǰ��Ա����������˵ı��ﲹ�䣨���ı�������ݡ�Ȩ�ޡ�ģ��·�ɻ���ʵ��׼����\n'+instructions.join('\n');
+ if(instructions.length)selected.developerInstructions=(selected.developerInstructions||'')+'\n当前成员经部署者审核的表达补充（不改变核心身份、权限、模型路由或事实标准）：\n'+instructions.join('\n');
  return selected;
 }
