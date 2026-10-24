@@ -58,5 +58,8 @@
     "inlineMaxCharacters": 500,
     "inlineMaxLines": 12,
     "forwardNodeCharacters": 800
+  },
+  "attention": {
+    "enabled": false
   }
 }
