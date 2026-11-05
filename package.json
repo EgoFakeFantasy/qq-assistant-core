@@ -30,11 +30,11 @@
     "verify": "npm run check && npm run test:core && npm run test:channels && npm run test:operations",
     "verify:knowledge": "python -m unittest discover -s tools -p test_*.py",
     "audit:public": "node scripts/audit-public.mjs",
-    "test:channels": "node --test test/qq-official.test.js test/llbot-runtime.test.js test/cognition-review.test.js test/portable-channel.test.js",
+    "test:channels": "node scripts/run-supplemental-tests.mjs channels",
     "prepare:official": "node scripts/prepare-qq-official.mjs",
     "check:official": "node scripts/check-qq-official.mjs",
     "prepare:llbot": "node scripts/prepare-llbot.mjs",
-    "test:operations": "node --test deployment/napcat-webui-auth.test.mjs deployment/qq-captcha-resume.test.mjs deployment/qq-device-resume.test.mjs deployment/qq-login-handoff.test.mjs deployment/qq-login-recovery.test.mjs deployment/qq-login-requirement.test.mjs deployment/qq-session-health.test.mjs"
+    "test:operations": "node scripts/run-supplemental-tests.mjs operations"
   },
   "engines": {
     "node": ">=24.0.0"
