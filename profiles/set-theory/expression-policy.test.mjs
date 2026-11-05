@@ -4,7 +4,7 @@ import {mkdtemp,mkdir,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
-import {applyExpressionPolicy,expressionInstructions} from './expression-policy.mjs';
+import {applyExpressionPolicy,expressionInstructions,directAnswerInstructions} from './expression-policy.mjs';
 import {formatQQReply,cleanBotHistory} from './response-format.mjs';
 import {personaInstructions,PERSONA_VERSION} from './persona.mjs';
 import {createLiveOneBot} from './live-onebot.mjs';
@@ -31,7 +31,7 @@ test('named QQ faces and verified CQ ids are removed without guessing unrelated 
 test('old bot history follows expression policy while member quotes and source state are preserved',()=>{
  const history=[{senderId:'2000000002',text:'在呢😂[狗头]'},{senderId:'12345678',text:'我发了😂'}];
  const clean=cleanBotHistory(history,'2000000002');assert.equal(clean[0].text,'在呢');assert.equal(clean[1].text,'我发了😂');assert.equal(history[0].text,'在呢😂[狗头]');
- assert.ok(personaInstructions.includes(expressionInstructions));assert.equal(PERSONA_VERSION,'2026-10-17.2');
+ assert.ok(personaInstructions.includes(directAnswerInstructions));assert.match(PERSONA_VERSION,/^\d{4}-\d{2}-\d{2}\.\d+$/);
 });
 test('ordinary and proactive OneBot sends enforce the same policy at the final transport',async()=>{
  const groupId='1000000001',botId='2000000002',writes=[];let last;
@@ -39,7 +39,7 @@ test('ordinary and proactive OneBot sends enforce the same policy at the final t
   const action=new URL(url).pathname;let data;
   if(action==='/get_login_info')data={user_id:botId};else if(action==='/get_group_list')data=[{group_id:groupId}];
   else if(action==='/send_group_msg'){last=JSON.parse(opt.body);writes.push(last);data={message_id:42};}
-  else if(action==='/get_msg')data={message_type:'group',group_id:groupId,sender:{user_id:botId},message:last.message};
+  else if(action==='/get_msg')data={message_id:42,message_type:'group',group_id:groupId,sender:{user_id:botId},message:last.message};
   else throw Error('UNEXPECTED_ACTION');
   return new Response(JSON.stringify({status:'ok',retcode:0,data}));
  }});

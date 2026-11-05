@@ -18,9 +18,26 @@
   "autonomousPublicSearch": true,
   "autonomousGroupTextbookImport": true,
   "allowedGroupIds": [
-    "1000000001"
+    "1000000001",
+    "1000000002",
+    "1000000003",
+    "1000000004"
   ],
-  "additionalGroups": [],
+  "additionalGroups": [
+    {
+      "groupId": "1000000002",
+      "name": "Example research group"
+    },
+    {
+      "groupId": "1000000003",
+      "name": "Example discussion group"
+    },
+    {
+      "groupId": "1000000004",
+      "name": "Example mentions-only group",
+      "replyPolicy": "mentions-only"
+    }
+  ],
   "workerConcurrency": 3,
   "perGroupConcurrency": 2,
   "optionalConcurrency": 1,
@@ -32,16 +49,19 @@
     "maxCommentsPerDay": 3,
     "commentsEnabled": false,
     "interestScope": "broad",
+    "likesEnabled": false,
     "maxVideosPerCycle": 3,
     "maxLikesPerDay": 12,
-    "likesEnabled": false
+    "minShareIntervalMs": 1800000,
+    "maxCycleMs": 1500000
   },
   "autonomousScholar": {
     "enabled": false,
     "targetGroupId": "1000000001",
-    "intervalMs": 10800000,
+    "intervalMs": 1800000,
     "maxPapersPerCycle": 2,
     "maxSharesPerDay": 2,
+    "maxCycleMs": 1200000,
     "categories": [
       "math.LO",
       "math.CO",
@@ -52,11 +72,66 @@
       "set theory",
       "mathematical logic",
       "combinatorics"
+    ],
+    "domains": [
+      "mathematics",
+      "continental-philosophy",
+      "analytic-philosophy"
     ]
   },
-  "replyPresentation": {
-    "inlineMaxCharacters": 500,
-    "inlineMaxLines": 12,
-    "forwardNodeCharacters": 800
+  "secondaryPersona": {
+    "enabled": false,
+    "name": "回",
+    "argonMinRemaining": 0.2,
+    "canary": null,
+    "activationMode": "mentioned-name",
+    "routeHumanities": true
+  },
+  "privateMessages": {
+    "enabled": false,
+    "maxConversations": 64
+  },
+  "quotaTimeZone": "Asia/Shanghai",
+  "idleReading": {
+    "enabled": false,
+    "afterMs": 300000,
+    "loadPolicy": {
+      "mode": "persona-majority",
+      "highMentionsPerMinute": 5
+    }
+  },
+  "attention": {
+    "enabled": false
+  },
+  "personaEvolution": {
+    "enabled": false
+  },
+  "socialMemory": {
+    "enabled": false
+  },
+  "autonomousLearning": {
+    "enabled": false,
+    "axu": {
+      "video": {
+        "intervalMs": 300000,
+        "maxVideosPerCycle": 6,
+        "mentionRetryMs": 5000
+      },
+      "article": {
+        "mentionRetryMs": 5000
+      }
+    },
+    "hui": {
+      "video": {
+        "intervalMs": 300000,
+        "maxVideosPerCycle": 6,
+        "mentionRetryMs": 5000
+      },
+      "article": {
+        "intervalMs": 1800000,
+        "maxPapersPerCycle": 2,
+        "mentionRetryMs": 5000
+      }
+    }
   }
 }

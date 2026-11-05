@@ -3,12 +3,13 @@ import {BilibiliExplorer} from './bilibili-explorer.mjs';
 import {createBilibiliSite} from './bilibili-site.mjs';
 import {createBilibiliMedia} from './bilibili-media.mjs';
 import {createBilibiliCurator} from './bilibili-curator.mjs';
-export async function createBilibiliRuntime({runtime,config,vault,transport,onShare}){
+export async function createBilibiliRuntime({runtime,config,vault,transport,onShare,persona='axu',learningMemory=null}){
  if(!config.autonomousBilibili?.enabled)return null;
  if(config.autonomousBilibili.targetGroupId!==config.groupId||!config.allowedGroupIds?.includes(config.groupId))throw Error('UNAPPROVED_BROWSE_TARGET');
+ const settings={...config.autonomousBilibili,...(config.autonomousLearning?.[persona]?.video||{})};
  const video=runtime.videoRuntime;if(!video?.ffmpegPath||!video.whisperPath||!video.whisperModelPath)throw Error('VIDEO_RUNTIME_NOT_INSTALLED');
- const site=createBilibiliSite({vault,expectedUid:runtime.bilibiliUid,allowComments:config.autonomousBilibili.commentsEnabled===true,allowLikes:config.autonomousBilibili.likesEnabled===true});
+ const site=createBilibiliSite({vault,expectedUid:runtime.bilibiliUid,allowComments:persona==='axu'&&settings.commentsEnabled===true,allowLikes:persona==='axu'&&settings.likesEnabled===true});
  const media=createBilibiliMedia({site,...video});
- const curator=createBilibiliCurator({...runtime,interestScope:config.autonomousBilibili.interestScope,inspectFrames:(evidence,times,options)=>media.inspect(evidence,times,options),isolatedHome:join(runtime.isolatedHome,'bilibili-autonomous')});
- return BilibiliExplorer.open({root:join(runtime.runtimeRoot,'bilibili'),site,media,curator,transport,onShare,config:config.autonomousBilibili});
+ const curator=createBilibiliCurator({...runtime,learningPersona:persona,learningMemory,interestScope:settings.interestScope,inspectFrames:(evidence,times,options)=>media.inspect(evidence,times,options),isolatedHome:join(runtime.isolatedHome,'bilibili-autonomous')});
+ return BilibiliExplorer.open({root:join(runtime.runtimeRoot,persona==='hui'?'hui-bilibili':'bilibili'),site,media,curator,transport,onShare,learningMemory,config:{quotaTimeZone:config.quotaTimeZone,...settings,...(persona==='hui'?{likesEnabled:false,commentsEnabled:false,maxSharesPerDay:0}: {})}});
 }

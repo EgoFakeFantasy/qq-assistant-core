@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createPlatformAccounts} from './platform-accounts.mjs';
 import {createAccountPanel} from './account-panel.mjs';
-const uid='4000000004';
+const uid='1000000001';
 function setup(responses){const saved=new Map(),calls=[];let time=5000;const vault={get:async n=>saved.get(n)||null,set:async(n,v)=>saved.set(n,v)};
 const api=createPlatformAccounts({vault,expectedUid:uid,enableZhihu:true,now:()=>time,fetchFn:async(u,o)=>{calls.push({u:String(u),o});const value=responses.shift();if(value instanceof Response)return value;return new Response(JSON.stringify(value),{headers:{'content-type':'application/json'}});}});
 return{api,saved,calls,advance:()=>{time+=3000;}};}
@@ -30,4 +30,8 @@ test('production default disables Zhihu without fetching or saving credentials',
  await assert.rejects(api.setZhihu('fixture-secret-0123456789'),/ZHIHU_DISABLED/);
  await assert.rejects(api.searchZhihu('集合论'),/ZHIHU_DISABLED/);
  assert.equal((await api.status()).zhihu.enabled,false);assert.equal(fetched,0);assert.equal(saved,0);
+});
+
+test('read-only Bilibili path uses the configured account and rejects another stored account before network',async()=>{
+ const s=setup([]);s.saved.set('bilibili',{uid:'2000000002',cookies:'fixture'});await assert.rejects(s.api.searchBilibili('集合论'),/WRONG_BILIBILI_ACCOUNT/);assert.equal(s.calls.length,0);
 });

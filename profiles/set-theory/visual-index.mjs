@@ -1,4 +1,5 @@
-import {readFile,writeFile,mkdir,rename,open,unlink} from 'node:fs/promises';
+import {acquireProcessLock} from './process-lock.mjs';
+import {readFile,writeFile,mkdir,rename} from 'node:fs/promises';
 import {join,dirname} from 'node:path';
 import {loadTextbooks} from './textbooks.mjs';
 import {createLiveModel} from './live-model.mjs';
@@ -22,7 +23,7 @@ export async function indexVisualPages({runtime,bookId,pages,generate,onProgress
  pages=[...pages].sort((a,b)=>a-b);
  const directory=join(dirname(runtime.indexPath),'visual-index',bookId);await mkdir(directory,{recursive:true});
  const lock=join(dirname(runtime.indexPath),'visual-index.lock');
- let handle;try{handle=await open(lock,'wx',0o600);await handle.writeFile(String(process.pid));await handle.close();handle=null;}catch{await handle?.close();throw Error('VISUAL_INDEX_ALREADY_RUNNING_OR_STALE_LOCK');}
+ const lease=await acquireProcessLock(lock,{busyCode:'VISUAL_INDEX_ALREADY_RUNNING'});
  try{
   const model=generate?null:createLiveModel({...runtime,knowledgeProtocol:false,prepareImages:knowledge.prepareImages});
   const run=generate||model.generate,all=[];let calls=0,reused=0;
@@ -48,5 +49,5 @@ export async function indexVisualPages({runtime,bookId,pages,generate,onProgress
   const indexed=all.filter(x=>!x.blank).map(x=>({bookId,title:book.title,page:x.pdfPage,text:x.headings.join('\n')+'\nKeywords: '+x.keywords.join('; ')+'\n'+x.content,sourceType:'ocr',ocrEngine:MODEL+'/'+EFFORT+' visual page indexing',transcriptionKind:'visual-semantic-index',formulaAccuracyVerified:false,manuallyReviewed:false,unclear:x.unclear}));
   await atomic(runtime.indexPath,{...current,pages:[...retained,...indexed]});
   return {completed:true,pdfPagesProcessed:all.length,indexedPages:indexed.length,modelCalls:calls,reusedBatches:reused,formulaAccuracyVerified:false};
- }finally{await unlink(lock);}
+ }finally{await lease.release();}
 }

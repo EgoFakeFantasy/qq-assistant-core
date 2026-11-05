@@ -18,13 +18,12 @@ export class ReadingMemory{
   #file;#state;#tail=Promise.resolve();#now;
   constructor(file,state,now){this.#file=resolve(file);this.#state=state;this.#now=now;}
   static async open(file,{now=Date.now,groupId='1000000001'}={}){
-    if(!/^\d{4,20}$/.test(groupId))throw Error('INVALID_READING_GROUP');
     file=resolve(file);await mkdir(dirname(file),{recursive:true});
     if(resolve(await realpath(dirname(file)))!==dirname(file))throw Error('LINKED_READING_ROOT');
     const info=await lstat(file).catch(e=>{if(e.code!=='ENOENT')throw e;return null;});
     if(info&&(!info.isFile()||info.isSymbolicLink()||info.size>2*1024*1024))throw Error('UNSAFE_READING_STATE');
     const state=info?JSON.parse(await readFile(file,'utf8')):{version:1,groupId,items:[],events:[],deliveries:[]};
-    if(state.version!==1||state.groupId!==groupId||!Array.isArray(state.items)||state.items.length>500||
+    if(state.version!==1||!/^\d{4,20}$/.test(groupId)||state.groupId!==groupId||!Array.isArray(state.items)||state.items.length>500||
       !Array.isArray(state.events)||state.events.length>1000||!Array.isArray(state.deliveries)||state.deliveries.length>500)throw Error('INVALID_READING_STATE');
     return new ReadingMemory(file,state,now);
   }
@@ -44,7 +43,7 @@ export class ReadingMemory{
       criteria:['论证清楚','条件完整','与当前话题相关','前置知识合适','允许没有值得推荐的内容'],
       userFeedback:own.map(e=>({itemId:e.itemId,action:e.action,title:this.#state.items.find(x=>x.id===e.itemId)?.title||''})),
       recentGroupReading:this.#state.items.slice(-6).map(x=>({id:x.id,title:x.title,page:x.page,inputKind:x.inputKind})),
-      rule:'输入记录不表示全书已读；already_known只表示当前成员对这份材料的反馈，不代表全群知识；风格与兴趣不改变数学事实。'};
+      rule:'内部使用：按实际输入页码接续资料，already_known用于当前成员的推荐排序，事实判断依据材料与推理；通常直接讨论内容。'};
   }
   rank(sources,userId){
     const own=this.#state.events.filter(e=>e.userId===userId);

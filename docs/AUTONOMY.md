@@ -28,7 +28,7 @@ External actions are recorded as sending before submission and budget use. Uncer
 
 ## Academic sources
 
-autonomousScholar.enabled defaults to false; its targetGroupId must be the primary group. Defaults discover every3 hours, read at most2 works per cycle and recommend at most2 per day, with at least1 hour between shares.
+autonomousScholar.enabled defaults to false; its targetGroupId must be the primary group. Defaults discover every30 minutes, read at most2 works per cycle and recommend at most2 per day, with at least1 hour between shares.
 
 - arXiv: official Atom API and RSS; defaults rotate math.LO, math.CO, math.CT and cs.LO.
 - Journals: Crossref ISSN records for JSL, APAL, Annals of Mathematics and Nature; two journals rotate per cycle. Configure journals with name/issn.
@@ -51,3 +51,15 @@ State is private/runtime/bilibili and private/runtime/scholar. Large video/PDF f
 Video viewing normally costs at least3 model calls per video, with more for detail inspection; academic reading normally costs2 per work. Higher cadence consumes shared Codex allowance faster and uses more bandwidth, CPU and disk. Social-action caps are separate from inference limits.
 
 An explicit platform rejection such as -403 persistently pauses that action, while reading and other permitted actions can continue. Only a newly saved platform login clears this pause; rejected operations are not repeatedly probed. Ready non-mention replies also reclaim the optional slot from background browsing.
+
+## Idle group reading and philosophy
+
+`idleReading: {"enabled": true, "afterMs": 1800000}` enables group-idle scheduling. Each allowlisted group keeps a durable last real current self-mention time. Ordinary chatter, mentions of others, quoted old mentions, duplicates and messages older than two minutes do not reset it. A group must be online and a confirmed member, with fresh health checks. Legacy state without this timestamp waits a full window after startup.
+
+Any eligible group can sponsor a shared reading cycle. Scholar and Bilibili alternate in one background slot; existing task intervals, budgets, backoff and question priority still apply. This is a shared queue, not simultaneous model runs for every idle group. The deployment uses a 30-minute interval for each reader; exact start can be delayed by active questions or the other reader. A new mention or offline sponsor cancels its cycle at the next scheduler check (within 30 seconds).
+
+Automatic idle cycles only read and keep private notes/evidence. They never send QQ shares, like videos or post Bilibili comments. This also permits quiet reading sponsored by mentions-only group 1000000004 while preserving its real-current-@ reply rule. Existing authenticated manual maintenance endpoints retain their prior action policy and primary target. Omitting/disabling `idleReading` retains legacy interval scheduling.
+
+`autonomousScholar.domains` accepts `mathematics`, `continental-philosophy`, `analytic-philosophy`. Domains rotate by cycle; philosophy adds Continental Philosophy Review (ISSN 1387-2842) and Philosophical Studies (ISSN 0031-8116) through Crossref. `journals` entries may carry a matching `domain`; untagged entries remain mathematics. Mathematics sources remain available. Configured philosophy interests merge into existing saved interests; broad Bilibili interests include both philosophy areas. Curators evaluate actual philosophical arguments and textual interpretation as well as mathematical results. Abstract-only reading remains labelled as such. Journal identities: https://www.ncbi.nlm.nih.gov/nlmcatalog/101679683 and https://portal.issn.org/resource/ISSN/0031-8116 .
+
+Authenticated `/api/maintenance.idleReading` reports the window and each group's eligibility/timestamp; it contains no group conversation. Scholar diagnostics expose the enabled domains. These checks require no synthetic QQ message or model call.

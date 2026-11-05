@@ -71,3 +71,9 @@ __pycache__/
 auth.json
 cookies.txt
 qrcode.png
+
+# Additional private runtime material
+*.sqlite-*
+*.sqlite3-*
+*.db-*
+*.png.log

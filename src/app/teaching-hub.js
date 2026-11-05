@@ -1,3 +1,6 @@
+import {createPrivateScopes} from '../../profiles/set-theory/private-scopes.mjs';
+import {LongTermMemory} from '../../profiles/set-theory/long-term-memory.mjs';
+import {PERSONA_VERSION} from '../../profiles/set-theory/persona.mjs';
 import {QuestionWorkerPool} from '../../profiles/set-theory/question-worker-pool.mjs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
@@ -10,33 +13,38 @@ import { LocalDurableState } from '../../profiles/set-theory/local-durable-state
 
 // Isolated application composition using the production Hub HTTP adapter.
 // No fallback into legacy commands, other groups, model selection, or tools.
-export async function createTeachingHub({ config, model, transport, knowledge, resources=null, reading=null, runtimeRoot, token, autoDrain = true, additionalScopes = [], backgroundStatus = () => null, runAutonomousBrowse = null, scholarStatus = () => null, runAutonomousScholar = null }) {
+export async function createTeachingHub({ config, model, transport, knowledge, resources=null, reading=null, memory=null, runtimeRoot, token, autoDrain = true, privateAdapters = null, additionalScopes = [], backgroundStatus = () => null, runAutonomousBrowse = null, scholarStatus = () => null, runAutonomousScholar = null, idleReadingStatus = () => null }) {
   if (typeof token !== 'string' || token.length < 24) throw new Error('AUTH_TOKEN_REQUIRED');
-  const bot = await TeachingBot.open({ config, model, transport, knowledge, resources, reading,
+  memory ||= await LongTermMemory.open(join(runtimeRoot,'long-term-memory'),{groupId:config.groupId,botId:config.botId,personaVersion:PERSONA_VERSION,personaEvolution:config.personaEvolution?.enabled===true,socialMemory:config.socialMemory?.enabled===true,timeZone:config.quotaTimeZone});
+  const bot = await TeachingBot.open({ config, model, transport, knowledge, resources, reading, memory,
     runtimeRoot: join(runtimeRoot, 'turns'), store: new LocalDurableState(join(runtimeRoot, 'state'),{groupId:config.groupId,botId:config.botId}) });
-  const scopes=new Map([[config.groupId,{config,bot,model,transport,knowledge}]]);
+  const scopes=new Map([[config.groupId,{config,bot,model,transport,knowledge,memory}]]);
   for(const scope of additionalScopes){
     if(!config.allowedGroupIds?.includes(scope.config.groupId)||scopes.has(scope.config.groupId)||scope.config.botId!==config.botId)throw Error('UNAPPROVED_GROUP_SCOPE');
-    const scopedBot=await TeachingBot.open({...scope,runtimeRoot:join(scope.runtimeRoot,'turns'),store:new LocalDurableState(join(scope.runtimeRoot,'state'),{groupId:scope.config.groupId,botId:scope.config.botId})});
-    scopes.set(scope.config.groupId,{...scope,bot:scopedBot});
+    const scopedMemory=scope.memory||await LongTermMemory.open(join(scope.runtimeRoot,'long-term-memory'),{groupId:scope.config.groupId,botId:scope.config.botId,personaVersion:PERSONA_VERSION,personaEvolution:scope.config.personaEvolution?.enabled===true,socialMemory:scope.config.socialMemory?.enabled===true,timeZone:scope.config.quotaTimeZone});
+    const scopedBot=await TeachingBot.open({...scope,memory:scopedMemory,runtimeRoot:join(scope.runtimeRoot,'turns'),store:new LocalDurableState(join(scope.runtimeRoot,'state'),{groupId:scope.config.groupId,botId:scope.config.botId})});
+    scopes.set(scope.config.groupId,{...scope,bot:scopedBot,memory:scopedMemory});
   }
   const controller = new AbortController();
   const limiter = createConcurrencyLimiter(1, { maxPending: 32 });
   const failures = [];
   let closing = false, closePromise;
   const workers=new QuestionWorkerPool(scopes,{concurrency:config.workerConcurrency||1,perGroup:config.perGroupConcurrency||1,optional:config.optionalConcurrency||1,onError:()=>{failures.push('TEACHING_DRAIN_FAILED');if(failures.length>20)failures.shift();}});
+  const direct=await createPrivateScopes({config,runtimeRoot,authorize:privateAdapters?.authorize,createAdapters:privateAdapters?.createAdapters,authorizationKind:privateAdapters?.authorizationKind,onScope:scope=>{scopes.set(scope.config.groupId,scope);workers.addScope(scope);}});
   function drain(){return workers.drain();}
   function scheduleDrain() {
     if (autoDrain) void drain().catch(() => { failures.push('TEACHING_DRAIN_FAILED'); if (failures.length > 20) failures.shift(); });
   }
   function state() {
     const d = bot.diagnostics;
-    const groups=[...scopes.values()].map(s=>({groupId:s.config.groupId,name:s.config.groupName||null,...s.bot.diagnostics,receipts:undefined,transport:s.transport.diagnostics||null,indexedPages:s.knowledge.pageCount}));
+    const all=[...scopes.values()].map(s=>s.bot.diagnostics);
+    const groups=[...scopes.values()].filter(s=>s.config.scopeType!=='private').map(s=>({groupId:s.config.groupId,name:s.config.groupName||null,...s.bot.diagnostics,receipts:undefined,transport:s.transport.diagnostics||null,indexedPages:s.knowledge.pageCount}));
     return { profile: 'set-theory', mode: config.mode, liveEnabled: config.mode === 'live', model: config.model,
-      personaVersion: d.personaVersion, indexedPages: knowledge.pageCount, textbookCount: knowledge.catalog?.length || 0,
-      dailyModelCallLimit: config.dailyModelCalls, proactiveIntervalMs: config.proactiveIntervalMs, longReplyForwardingEnabled:true, replyPresentation:transport.diagnostics?.replyPresentation||config.replyPresentation||null, plainTextFilteringEnabled: true, cannedDisclaimerFilteringEnabled:true, autonomousTopicsEnabled:true, quotedTextReadingEnabled:typeof transport.readQuote==='function',
+      personaVersion: d.personaVersion, secondaryPersona:d.secondaryPersona, indexedPages: knowledge.pageCount, textbookCount: knowledge.catalog?.length || 0,
+      channel:transport.diagnostics?.provider||'onebot',identityNamespace:transport.diagnostics?.identityNamespace||null,capabilities:transport.capabilities||null,
+      dailyModelCallLimit: config.dailyModelCalls, proactiveIntervalMs: config.proactiveIntervalMs, longReplyForwardingEnabled:transport.capabilities?.forwardCards??true, replyPresentation:transport.diagnostics?.replyPresentation||config.replyPresentation||null, plainTextFilteringEnabled: true, cannedDisclaimerFilteringEnabled:true, autonomousTopicsEnabled:config.replyPolicy!=='mentions-only', quotedTextReadingEnabled:typeof transport.readQuote==='function',
       reasoningEffort: config.reasoningEffort, groupId: config.groupId, botId: config.botId,
-      queued: groups.reduce((n,g)=>n+g.queued,0), active:workers.diagnostics.active, bilibiliExplorer:backgroundStatus(), scholarExplorer:scholarStatus(), workers:workers.diagnostics, groups, allowedGroupIds:[...scopes.keys()], modelCalls:groups.reduce((n,g)=>n+g.modelCalls,0), storageFaulted:groups.some(g=>g.storageFaulted), reading:d.reading,
+      privateMessages:direct.diagnostics, quotaTimeZone:bot.diagnostics.quotaTimeZone, queued: all.reduce((n,g)=>n+g.queued,0), active:workers.diagnostics.active, bilibiliExplorer:backgroundStatus(), scholarExplorer:scholarStatus(), idleReading:idleReadingStatus(), workers:workers.diagnostics, groups, allowedGroupIds:groups.map(g=>g.groupId), modelCalls:all.reduce((n,g)=>n+g.modelCalls,0), storageFaulted:all.some(g=>g.storageFaulted), reading:d.reading, longTermMemory:d.longTermMemory,
       receiptCount: [...scopes.values()].reduce((n,s)=>n+s.bot.diagnostics.receipts.length,0), closing };
   }
   const server = createHubHttpServer({
@@ -65,6 +73,20 @@ export async function createTeachingHub({ config, model, transport, knowledge, r
         sendJson(res, 403, { error: 'Authenticated loopback request required' }); return;
       }
       if (closing) { sendJson(res, 503, { error: 'Hub closing' }); return; }
+      if(req.method==='POST'&&req.url==='/api/maintenance/social-memory'){
+        const body=await readBody(req,{requireJson:true,maxBytes:2048});
+        if(!body||Object.keys(body).some(k=>!['groupId','persona','action','userId','query','messageId'].includes(k))||!['axu','hui'].includes(body.persona)||!['stats','cards','card','dialogue','search'].includes(body.action)||body.userId!==undefined&&(typeof body.userId!=='string'||!/^\d{4,20}$/.test(body.userId))||body.query!==undefined&&(typeof body.query!=='string'||body.query.length>300)||body.messageId!==undefined&&(typeof body.messageId!=='string'||body.messageId.length>128)){sendJson(res,400,{error:'INVALID_SOCIAL_MEMORY_REQUEST'});return;}
+        const scope=scopes.get(body.groupId);if(!scope||scope.config.scopeType==='private'){sendJson(res,404,{error:'GROUP_NOT_FOUND'});return;}
+        const value=scope.bot.socialMemoryQuery(body);sendJson(res,value===null||value===undefined?404:200,value??{error:'SOCIAL_MEMORY_UNAVAILABLE'});return;
+      }
+      if(req.method==='POST'&&req.url==='/api/maintenance/persona-review'){
+        const body=await readBody(req,{requireJson:true,maxBytes:1024});
+        if(!body||Object.keys(body).some(k=>!['groupId','persona','action','id','expectedRevision'].includes(k))||!['axu','hui'].includes(body.persona)||!['list','approve','reject','rollback'].includes(body.action)){sendJson(res,400,{error:'INVALID_PERSONA_REVIEW_REQUEST'});return;}
+        const scope=scopes.get(body.groupId);
+        if(!scope||scope.config.scopeType==='private'){sendJson(res,404,{error:'GROUP_NOT_FOUND'});return;}
+        try{const result=body.action==='list'?await scope.bot.personaReview(body.persona):await scope.bot.decidePersona({persona:body.persona,id:body.id,decision:body.action,expectedRevision:body.expectedRevision});sendJson(res,result?200:404,result||{error:'PERSONA_EVOLUTION_DISABLED'});}
+        catch(e){sendJson(res,409,{error:['PERSONA_REVIEW_STALE','PERSONA_REVIEW_STATE_CONFLICT','PERSONA_PROPOSAL_NOT_FOUND','PERSONA_PATCH_LIMIT','PERSONA_EVOLUTION_DISABLED'].includes(e.message)?e.message:'PERSONA_REVIEW_FAILED'});}return;
+      }
       if(req.method==='POST'&&['/api/maintenance/bilibili/run','/api/maintenance/scholar/run'].includes(req.url)){
         const body=await readBody(req,{requireJson:true,maxBytes:128});
         if(!body||Object.keys(body).length){sendJson(res,400,{error:'EMPTY_OBJECT_REQUIRED'});return;}
@@ -88,8 +110,8 @@ export async function createTeachingHub({ config, model, transport, knowledge, r
           const expected = 'sha1=' + createHmac('sha1', token).update(raw).digest('hex');
           if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) throw new HttpError(403, 'Invalid OneBot signature');
         } });
-      const target=scopes.get(String(payload.group_id));
-      const result=target?await target.bot.ingest(payload):{status:'ignored'};
+      const target=payload.message_type==='group'?scopes.get(String(payload.group_id)):null;
+      const result=payload.message_type==='private'?await direct.ingest(payload):target?await target.bot.ingest(payload):{status:'ignored'};
       // Accepted is returned only after the durable checkpoint succeeds.
       sendJson(res, 202, result);
       scheduleDrain();
@@ -97,6 +119,7 @@ export async function createTeachingHub({ config, model, transport, knowledge, r
   });
   server.requestTimeout = 15000; server.headersTimeout = 10000;
   return { server, bot, scopes, workers, failures, drain,
+    async refreshPrivateScopes(){await direct.refresh?.();scheduleDrain();},
     async listen(port = 0) {
       if (!Number.isSafeInteger(port) || port < 0 || port > 65535) throw new Error('INVALID_PORT');
       await new Promise((resolve, reject) => {
@@ -112,6 +135,7 @@ export async function createTeachingHub({ config, model, transport, knowledge, r
         closing = true; controller.abort(); limiter.close();
         if (server.listening) await new Promise(resolve => { server.close(resolve); server.closeIdleConnections?.(); });
         await drain();
+        for(const scope of scopes.values())scope.memory?.close?.();
       })();
       return closePromise;
     }

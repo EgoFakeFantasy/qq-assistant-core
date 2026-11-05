@@ -53,3 +53,7 @@ This repository runs a local Hub between QQ/OneBot and a local agent CLI (Codex 
 - Keep textbooks, extracted indexes, credentials, QR codes, chat logs, private acceptance reports and local audit records out of Git. Use only synthetic fixtures in published tests.
 - Run npm run verify, the synthetic PDF tests and npm run audit:public for core changes. The legacy test tree has a separate test:upstream entry point.
 - Preserve upstream attribution and licensing status; do not assign a blanket license to inherited code.
+
+## Reusable snapshot after deployment retirement
+
+The original operator authorized publication of all reusable source and deletion of local bot maintenance resources. Follow docs/REUSE.md. Examples contain synthetic identities only. Never recreate a scheduled monitor, install a bridge, reuse a removed credential, or activate autonomous external actions just because this code exists. New operators initialize their own private configuration and authorize actual login/delivery separately. Preserve source provenance and do not import private chat records, cached media, book text or old acceptance logs into this repository.

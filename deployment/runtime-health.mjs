@@ -4,6 +4,12 @@ import {fileURLToPath} from 'node:url';
 import {authenticateWebui} from './napcat-webui-auth.mjs';
 const at=process.argv.indexOf('--config');
 const configPath=at<0?fileURLToPath(new URL('../private/live-config.json',import.meta.url)):resolve(process.argv[at+1]);
+const selectionPath=fileURLToPath(new URL('../private/bridge-selection.json',import.meta.url));
+try{
+ const selection=JSON.parse(await readFile(selectionPath,'utf8'));
+ if(selection.version!==1||!/^\d{4,20}$/.test(selection.account)||!['napcat','llbot'].includes(selection.bridge))throw Error('INVALID_BRIDGE_SELECTION');
+ if(selection.bridge==='llbot'){const {llbotHealth}=await import('./llbot-health.mjs');console.log(JSON.stringify(await llbotHealth()));process.exit(0);}
+}catch(e){if(e.code!=='ENOENT')throw e;}
 const c=JSON.parse(await readFile(configPath,'utf8'));
 const p=JSON.parse(await readFile(c.profilePath,'utf8'));
 const state={hubReachable:false,oneBotReachable:false,webuiReachable:false,qqOnline:false,allGroupsVerified:false,hubScopesReady:false,requiresPhoneLogin:null,busy:false,groups:[]};

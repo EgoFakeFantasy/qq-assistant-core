@@ -290,3 +290,9 @@ Never paste real secrets into issues, screenshots, chat transcripts or Git diffs
 3. Extend `test/environment-config.test.js`.
 4. Update both languages and the maintenance skill.
 5. Run `npm run verify`.
+
+## Set-theory assistant per-group reply policy
+
+Each additionalGroups entry can independently set replyPolicy to adaptive (default) or mentions-only. The latter applies only to that group: a fresh direct mention of this bot is required for answers, resource commands and feedback. Ordinary chat, set-theory topics, @all, mentions of others, quoted mentions and unmentioned persona summons do not trigger a reply. Text remains available as context for a later direct mention within the same group. Restored queued jobs use the same gate.
+
+The delivery adapter reads the original QQ message to verify group, message ID and direct mention, and refuses all proactive sends for the restricted group. The worker pool disallows background Bilibili or scholarly jobs there. Each additional group normalizes its own policy, preserving other groups. The groups entries in api/state expose replyPolicy and autonomousTopicsEnabled.

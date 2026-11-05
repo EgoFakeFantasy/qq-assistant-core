@@ -22,6 +22,6 @@ export async function openAutonomyStore(root,{stateFile,statusFile,initial,maxBy
   const task=tail.then(async()=>{await atomic(stateFile,body);await atomic(statusFile,view);});tail=task.catch(()=>{});return task;
  }};
 }
-export const autonomyDay=now=>new Intl.DateTimeFormat('en-CA',{timeZone:'Australia/Sydney',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(now));
+export {quotaDay as autonomyDay} from './quota-day.mjs';
 export const autonomyCode=e=>/^[A-Z_0-9]+$/.test(e?.message||'')?e.message:'BROWSE_OPERATION_FAILED';
 export const platformBlocked=code=>/LOGIN|VERIFICATION|RESTRICTION|BACKOFF|ACCOUNT/.test(code);

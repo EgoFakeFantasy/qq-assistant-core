@@ -15,7 +15,7 @@ function fixture(groups,options={}){
  }));
  const pool=new QuestionWorkerPool(scopes,{concurrency:3,perGroup:2,optional:1,onError:e=>errors.push(e),...options});
  const finish=async()=>{for(let i=0;i<100;i++){for(const [key,task] of running){running.delete(key);task.resolve();}await tick();if(!pool.diagnostics.active)break;}};
- return {pool,started,running,errors,finish,enqueue:(group,id,mandatory=true)=>queues.get(String(group)).push({messageId:id,senderId:id,mandatory})};
+ return {pool,started,running,errors,finish,enqueue:(group,id)=>queues.get(String(group)).push({messageId:id,senderId:id,mandatory:true})};
 }
 test('global and per-group limits permit three independent jobs before completion',async()=>{
  const f=fixture([[['a'],['b'],['c']],[['d'],['e']]]);
@@ -60,7 +60,9 @@ test('a fresh mention reclaims a running background slot without interrupting no
  await f.finish();await drained;
 });
 
-test('a ready non-mention reply reclaims the optional background slot',async()=>{
- const f=fixture([[]]);let signal;const background=f.pool.runBackground('0',options=>new Promise(resolve=>{signal=options.signal;signal.addEventListener('abort',resolve,{once:true});}));await tick();
- f.enqueue(0,'casual',false);const drained=f.pool.drain();await background;await until(()=>f.started.length===1);assert.equal(signal.aborted,true);assert.deepEqual(f.started,['0:casual']);await f.finish();await drained;
+test('frequency-gated background shares spare capacity with one ordinary reply and keeps its foreground budget',async()=>{
+ const f=fixture([[['a',false]],[]]);const drained=f.pool.drain();let done;const background=f.pool.runBackground('1',()=>new Promise(resolve=>{done=resolve;}),{readOnly:true,independentOptional:true});assert.ok(background);await tick();assert.equal(f.pool.diagnostics.active,2);assert.equal(f.pool.diagnostics.activeOptional,1);assert.equal(f.pool.diagnostics.activeBackground,1);done();await background;await f.finish();await drained;
+});
+test('independent background yields when capacity is needed, rather than on every new call',async()=>{
+ const f=fixture([[['a']],[]]);const drained=f.pool.drain();let signal;const background=f.pool.runBackground('1',options=>new Promise(resolve=>{signal=options.signal;signal.addEventListener('abort',resolve,{once:true});}),{readOnly:true,independentOptional:true});await tick();f.enqueue(1,'b');f.pool.drain();await tick();assert.equal(signal.aborted,false);assert.equal(f.pool.diagnostics.active,3);f.enqueue(0,'c');f.pool.drain();await background;await until(()=>f.started.includes('0:c'));assert.equal(signal.aborted,true);await f.finish();await drained;
 });

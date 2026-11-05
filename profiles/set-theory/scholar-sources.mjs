@@ -1,3 +1,4 @@
+import {philosophyJournals,scholarDomains} from './scholar-domains.mjs';
 import {XMLParser,XMLValidator} from 'fast-xml-parser';
 import {fetchPublic,plainHtml,publicQuery} from './public-fetch.mjs';
 import {setTimeout as delay} from 'node:timers/promises';
@@ -44,13 +45,16 @@ export function createScholarSources({fetchFn=fetchPublic,now=Date.now,sleep=del
   const key=String(url),old=cache.get(key);if(old&&now()-old.at<3600000){diagnostics.cacheHits++;return old.result;}
   const result=await request(url,options);cache.set(key,{at:now(),result});if(cache.size>32)cache.delete(cache.keys().next().value);return result;
  }
- return {diagnostics,async discover({categories=['math.LO','math.CO','math.CT','cs.LO'],journals=defaultJournals,query='',cursor=0,lookbackDays=90},{signal}={}){
+ return {diagnostics,async discover({categories=['math.LO','math.CO','math.CT','cs.LO'],journals=defaultJournals,query='',cursor=0,lookbackDays=90,domains=['mathematics']},{signal}={}){
   if(!Array.isArray(categories)||!categories.length||categories.length>8||categories.some(c=>!/^[a-z]+\.[A-Z]{2}$/.test(c)))throw Error('SCHOLAR_CATEGORIES_INVALID');
   if(!Array.isArray(journals)||journals.length>12||journals.some(j=>!/^\d{4}-\d{3}[\dX]$/.test(j.issn)||typeof j.name!=='string'||j.name.length>150))throw Error('SCHOLAR_JOURNALS_INVALID');
+  if(!Array.isArray(domains)||!domains.length||domains.some(d=>!scholarDomains.includes(d)))throw Error('SCHOLAR_DOMAINS_INVALID');
+  const domain=domains[cursor%domains.length];
+  journals=[...new Map([...journals,...philosophyJournals.filter(j=>domains.includes(j.domain))].map(j=>[j.issn,j])).values()].filter(j=>(j.domain||'mathematics')===domain);
   if(query)publicQuery(query);
   const candidates=[],states=[],category=categories[cursor%categories.length],url=new URL('https://export.arxiv.org/api/query');
   url.search=new URLSearchParams({search_query:'cat:'+category+(query?' AND all:"'+query.replace(/["\\]/g,' ')+'"':''),start:'0',max_results:'12',sortBy:'submittedDate',sortOrder:'descending'}).toString();
-  try{const r=await cached(url,{signal});candidates.push(...parseScholarFeed(r.bytes.toString('utf8')));states.push({source:'arXiv',ok:true,category});}
+  if(domain==='mathematics')try{const r=await cached(url,{signal});candidates.push(...parseScholarFeed(r.bytes.toString('utf8')));states.push({source:'arXiv',ok:true,category});}
   catch(e){
    signal?.throwIfAborted();states.push({source:'arXiv API',ok:false,reason:/^[A-Z_0-9]+$/.test(e.message)?e.message:'SOURCE_UNAVAILABLE'});
    // RSS is a separate official delivery service. Do not evade platform backoff.
@@ -60,7 +64,7 @@ export function createScholarSources({fetchFn=fetchPublic,now=Date.now,sleep=del
   for(let i=0;i<Math.min(2,journals.length);i++){
    const j=journals[(cursor*2+i)%journals.length],u=new URL('https://api.crossref.org/journals/'+j.issn+'/works');
    u.search=new URLSearchParams({filter:'type:journal-article,from-pub-date:'+from+',until-pub-date:'+until,rows:'8',sort:'published',order:'desc'}).toString();
-   try{const r=await cached(u,{signal}),data=JSON.parse(r.bytes.toString('utf8'));candidates.push(...(data.message?.items||[]).map(x=>normalizeCrossref(x,j)).filter(Boolean));states.push({source:j.name,ok:true});}
+   try{const r=await cached(u,{signal}),data=JSON.parse(r.bytes.toString('utf8'));candidates.push(...(data.message?.items||[]).map(x=>normalizeCrossref(x,j)).filter(Boolean));states.push({source:j.name,domain,ok:true});}
    catch(e){signal?.throwIfAborted();states.push({source:j.name,ok:false,reason:/^[A-Z_0-9]+$/.test(e.message)?e.message:'SOURCE_UNAVAILABLE'});}
   }
   diagnostics.sources=states;

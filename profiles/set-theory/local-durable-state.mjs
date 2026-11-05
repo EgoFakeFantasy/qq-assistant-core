@@ -1,3 +1,5 @@
+import {validatePersonaMentions} from './persona-load.mjs';
+import {validateAttention} from '../../src/domain/cognition/attention.js';
 import { mkdir, realpath, lstat, readFile, open, rename, unlink } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -7,14 +9,20 @@ import { syncDirectory } from '../../src/file-store.js';
 // Successful save means file data was synced and atomically renamed. Some OSes
 // do not support directory fsync; hard power-loss durability is a separate gate.
 export function validateTeachingState(state,{groupId='1000000001',botId='2000000002'}={}) {
-  if (!state || ![1,2].includes(state.version) || state.groupId !== groupId || !/^\d{4,20}$/.test(groupId) || state.botId !== botId || !/^\d{4,20}$/.test(botId) ||
+  if (!state || ![1,2].includes(state.version) || state.groupId !== groupId || !/^(?:private:)?\d{4,20}$/.test(groupId) || state.botId !== botId || !/^\d{4,20}$/.test(botId) ||
       !Number.isSafeInteger(state.calls) || state.calls < 0 || state.calls > Number.MAX_SAFE_INTEGER ||
       typeof state.day !== 'string' || !/^(?:|\d{4}-\d{2}-\d{2})$/.test(state.day)) throw new Error('INVALID_STATE');
   for (const [key, limit] of [['queue',256],['context',200],['seen',10000],['lastUser',10000],['receipts',200]]) {
     if (!Array.isArray(state[key]) || state[key].length > limit) throw new Error('INVALID_STATE_' + key);
   }
+  if(state.personaSeen!==undefined&&(!state.personaSeen||typeof state.personaSeen!=='object'||Array.isArray(state.personaSeen)||Object.keys(state.personaSeen).some(k=>!['gemini','quotaEpoch'].includes(k))||state.personaSeen.gemini!==undefined&&typeof state.personaSeen.gemini!=='boolean'||state.personaSeen.quotaEpoch!==undefined&&(typeof state.personaSeen.quotaEpoch!=='string'||state.personaSeen.quotaEpoch.length>128)))throw Error('INVALID_PERSONA_STATE');
+  if(state.lastSelfMentionAt!==undefined&&(!Number.isFinite(state.lastSelfMentionAt)||state.lastSelfMentionAt<0))throw Error('INVALID_MENTION_TIME');
+  if(state.attention!==undefined)validateAttention(state.attention);
+  if(state.personaMentions!==undefined)validatePersonaMentions(state.personaMentions);
+  const privatePeer=groupId.startsWith('private:')?groupId.slice(8):null;
+  if(privatePeer&&state.context.some(row=>!row||![privatePeer,botId].includes(row.senderId)||typeof row.text!=='string'))throw Error('INVALID_PRIVATE_CONTEXT');
   const jobValid = job => job && typeof job.mandatory === 'boolean' && Array.isArray(job.context) && job.context.length <= 200 &&
-    job.event?.groupId === state.groupId && /^\d{4,20}$/.test(job.event?.senderId) && job.event.senderId !== state.botId &&
+    job.event?.groupId === state.groupId && (!privatePeer||job.event.senderId===privatePeer&&job.context.every(row=>row&&[privatePeer,botId].includes(row.senderId)&&typeof row.text==='string'))&& /^\d{4,20}$/.test(job.event?.senderId) && job.event.senderId !== state.botId &&
     typeof job.event.text === 'string' && job.event.text.length <= 12000 &&
     typeof job.event.raw?.message_id === 'string' && job.event.raw.message_id.length <= 128;
   if(state.version===2&&(!Array.isArray(state.activeJobs)||state.activeJobs.length>6||state.activeJobs.some(a=>!jobValid(a.job)||!['generating','sending'].includes(a.phase))||JSON.stringify(state.active)!==JSON.stringify(state.activeJobs[0]||null)||new Set(state.activeJobs.map(a=>a.job.event.raw.message_id)).size!==state.activeJobs.length))throw Error('INVALID_ACTIVE_JOBS');
@@ -30,7 +38,7 @@ export function validateTeachingState(state,{groupId='1000000001',botId='2000000
 export class LocalDurableState {
   #root; #file; #groupId; #botId; #tail = Promise.resolve(); #poisoned = false;
   constructor(root, { maxBytes = 2 * 1024 * 1024, groupId='1000000001', botId='2000000002' } = {}) {
-    if(!/^\d{4,20}$/.test(groupId))throw Error('INVALID_GROUP_ID');this.#groupId=groupId;if(!/^\d{4,20}$/.test(botId))throw Error('INVALID_BOT_ID');this.#botId=botId;
+    if(!/^(?:private:)?\d{4,20}$/.test(groupId))throw Error('INVALID_GROUP_ID');this.#groupId=groupId;if(!/^\d{4,20}$/.test(botId))throw Error('INVALID_BOT_ID');this.#botId=botId;
     this.#root = resolve(root); this.#file = join(this.#root, 'teaching-state.json');
     if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) throw new Error('INVALID_LIMIT');
     this.maxBytes = maxBytes;

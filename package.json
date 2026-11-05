@@ -1,6 +1,6 @@
 {
   "name": "qq-assistant-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "QQ research assistant core: private textbook retrieval, autonomous Bilibili exploration and scoped platform accounts",
   "type": "module",
@@ -27,15 +27,21 @@
     "test": "node scripts/run-core-tests.mjs",
     "test:core": "node scripts/run-core-tests.mjs",
     "test:upstream": "node --test test",
-    "verify": "npm run check && npm run test:core",
+    "verify": "npm run check && npm run test:core && npm run test:channels && npm run test:operations",
     "verify:knowledge": "python -m unittest discover -s tools -p test_*.py",
-    "audit:public": "node scripts/audit-public.mjs"
+    "audit:public": "node scripts/audit-public.mjs",
+    "test:channels": "node --test test/qq-official.test.js test/llbot-runtime.test.js test/cognition-review.test.js test/portable-channel.test.js",
+    "prepare:official": "node scripts/prepare-qq-official.mjs",
+    "check:official": "node scripts/check-qq-official.mjs",
+    "prepare:llbot": "node scripts/prepare-llbot.mjs",
+    "test:operations": "node --test deployment/napcat-webui-auth.test.mjs deployment/qq-captcha-resume.test.mjs deployment/qq-device-resume.test.mjs deployment/qq-login-handoff.test.mjs deployment/qq-login-recovery.test.mjs deployment/qq-login-requirement.test.mjs deployment/qq-session-health.test.mjs"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24.0.0"
   },
   "dependencies": {
     "fast-xml-parser": "5.11.2",
-    "qrcode": "1.5.4"
+    "qrcode": "1.5.4",
+    "@tencent-connect/qqbot-nodejs": "1.0.5"
   }
 }

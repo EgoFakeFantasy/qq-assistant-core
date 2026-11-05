@@ -20,21 +20,22 @@ export async function loadTextbooks({corpusRoot,indexPath,pythonPath,pythonLibra
   if(/冯琦|導引|导引/.test(name)){
    const volume=/(?:第\s*)?(?:三|3)\s*[卷册]/.test(name)?'第三卷':/(?:第\s*)?(?:二|2)\s*[卷册]/.test(name)?'第二卷':/(?:第\s*)?(?:一|1)\s*[卷册]/.test(name)?'第一卷':null;return volume?manifest.books.find(b=>b.title.includes('冯琦')&&b.title.includes(volume)):undefined;
   }
-  if(/higher\s*infinite|kanamori/i.test(name))return manifest.books.find(b=>/higher\s*infinite|kanamori/i.test(b.title));
+  if(/higher\s*infinite|kanamori|更高的无穷/i.test(name))return manifest.books.find(b=>/higher\s*infinite|kanamori/i.test(b.title));
   if(/高阶无穷/.test(name))return manifest.books.find(b=>b.title.includes('第三卷'));
   if(/Jech/i.test(name))return manifest.books.find(b=>b.title.includes(/中文|译本/.test(name)?'中译本':'(English)')&&/Jech/i.test(b.title));
   return undefined;
  }
  function readPage(bookId,page){const b=manifest.books.find(b=>b.bookId===bookId);if(!b||!Number.isInteger(page)||page<1||page>b.pages)return null;
   return complete.readPage(bookId,page)||{citation:`${bookId.slice(0,12)}:p${page}`,bookId,title:b.title,pdfPage:page,printedPage:null,text:'本页以原页图像提供。',sourceType:'image',truncated:false};}
+ function searchStatus(query){return {missingRequestedBooks:/higher\s*infinite|kanamori|更高的无穷/i.test(query)&&!bookFor(String(query))?['Kanamori — The Higher Infinite']:[]};}
  function search(query,options={}){
   const command=String(query).match(/\/(?:读书|读文件|read)\s+(.+?)\s+(?:第\s*)?(\d+)(?:\s*[-—至]\s*(\d+))?\s*页?/i);
   if(command){const b=bookFor(command[1]);if(!b)return[];const begin=Number(command[2]),end=Math.min(Number(command[3]||begin),begin+1);return Array.from({length:Math.max(0,end-begin+1)},(_,i)=>readPage(b.bookId,begin+i)).filter(Boolean);}
   const requested=bookFor(String(query));
-  if(/higher\s*infinite|kanamori/i.test(query)&&!requested)return[];
-  const chapter=options.chapter||parseChapterNumber(query);
+
+  const chapter=options.chapter||(searchStatus(query).missingRequestedBooks.length?undefined:parseChapterNumber(query));
   const bookIds=options.bookIds|| (requested?[requested.bookId]:/冯琦|集合论导引|集合論導引/.test(query)?manifest.books.filter(b=>b.title.includes('冯琦')).map(b=>b.bookId):/中文|中译本/.test(query)?manifest.books.filter(b=>b.language==='zh'||!b.title.includes('(English)')).map(b=>b.bookId):undefined);
-  let contentQuery=String(query);if(requested)for(const alias of [...(requested.sourceNames||[]),...(requested.aliases||[])]){contentQuery=contentQuery.replaceAll(alias,' ');}contentQuery=contentQuery.replace(/公理集合论导引|集合论导引|集合論導引|冯琦|Jech|第[一二三四五六七八九十\d]+[章卷]/gi,' ');
+  let contentQuery=String(query);if(requested)for(const alias of [...(requested.sourceNames||[]),...(requested.aliases||[])]){contentQuery=contentQuery.replaceAll(alias,' ');}contentQuery=contentQuery.replace(/公理集合论导引|集合论导引|集合論導引|冯琦|Jech|(?:the\s+)?higher\s*infinite|kanamori|更高的无穷|第[一二三四五六七八九十\d]+[章卷]/gi,' ');
   const hits=complete.search(contentQuery,{...options,bookIds,chapter,limit:24,maxCharacters:96000});
   const selected=[];const counts=new Map();let ocrCount=0;
   for(const hit of hits){if(selected.length>=(options.limit||4))break;if(hit.sourceType==='ocr'&&ocrCount>=2)continue;
@@ -58,5 +59,5 @@ export async function loadTextbooks({corpusRoot,indexPath,pythonPath,pythonLibra
   }
   return images;
  }
- return {search,readPage,prepareImages,pageCount:complete.pageCount,chapters:complete.chapters,catalog:manifest.books.map(({bookId,title,pages,sourceNames=[],aliases=[],pdfToc=[]})=>({bookId,title,pages,sourceNames,aliases,outline:pdfToc.filter(x=>x.level===1).slice(0,45)}))};
+ return {search,searchStatus,readPage,prepareImages,pageCount:complete.pageCount,chapters:complete.chapters,catalog:manifest.books.map(({bookId,title,pages,sourceNames=[],aliases=[],pdfToc=[]})=>({bookId,title,pages,sourceNames,aliases,outline:pdfToc.filter(x=>x.level===1).slice(0,45)}))};
 }

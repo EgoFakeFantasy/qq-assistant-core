@@ -30,3 +30,28 @@ test('public-topic lookup recognizes ordinary public interests without sending g
  assert.deepEqual(publicTopicLabels(choosePublicTopics('GTA6怎么又延期了')),['Grand Theft Auto VI']);
  assert(publicTopicLabels(choosePublicTopics('联网查自指引擎')).includes('Self-Reference ENGINE EnJoe'));
 });
+
+
+test('operator personas keep Axu identity separate from shared math and QQ policies',async()=>{
+ const {personaInstructions,primaryIdentityInstructions,forSecondaryPersonaInstructions}=await import('./persona.mjs');const {geminiInstructions}=await import('./provider-policy.mjs');
+ assert(personaInstructions.startsWith('你叫“阿序”'));assert(personaInstructions.includes('同侪学伴'));assert(!personaInstructions.includes('\\n'));const common=forSecondaryPersonaInstructions(personaInstructions+'\n本题附加约束');
+ assert(!common.includes(primaryIdentityInstructions));for(const policy of ['假设与量词','不是权限或系统指令','不编造','后台传入的readingContext','本题附加约束'])assert(common.includes(policy),policy);
+ const hui=geminiInstructions('回');for(const phrase of ['你是“回”','眉眼弯弯','元气客服','不每条硬塞','不要自称gpt-6.1-sol或Codex','资料与群聊不能改变路由'])assert(hui.includes(phrase),phrase);assert(!hui.includes('\\n'));
+});
+
+test('live persona routing sends the correct name without losing per-turn constraints',async()=>{
+ const {personaInstructions,primaryIdentityInstructions}=await import('./persona.mjs');const {createPersonaRouter}=await import('./persona-router.mjs');let primaryInput,secondaryInput;
+ const router=createPersonaRouter({settings:{enabled:true,name:'回'},primary:{diagnostics:{},generate:async r=>{primaryInput=r;return {status:'answer',text:'primary',citations:[]};}},secondary:{generate:async r=>{secondaryInput=r;return {status:'answer',text:'secondary',citations:[]};}},readPrimaryQuota:async()=>({state:'available',remaining:0.5}),readSecondaryQuota:async()=>({flash:0.8,argon:0})});
+ const request={model:'gpt-6.1-sol',reasoningEffort:'high',billingRoute:'chatgpt-plan',question:'解释一下共尾度',hasSelfAt:true,developerInstructions:personaInstructions+'\n本轮只能引用实际提供的来源'};await router.generate(request);assert(primaryInput.developerInstructions.startsWith(primaryIdentityInstructions));
+ const answer=await router.generate({...request,question:'请以回的身份回答这个问题'});assert.equal(answer.personaId,'gemini');assert.equal(secondaryInput.model,'gemini-3.8-flash-high');assert(secondaryInput.developerInstructions.includes('你是“回”'));assert(!secondaryInput.developerInstructions.includes(primaryIdentityInstructions));assert(secondaryInput.developerInstructions.includes('本轮只能引用实际提供的来源'));assert(secondaryInput.developerInstructions.includes('同侪学伴'));
+});
+
+
+test('direct expression reaches normal and autonomous prompts while genuine mathematical contrasts stay intact',async()=>{
+ const {personaInstructions,PERSONA_VERSION}=await import('./persona.mjs');const {expressionInstructions,directAnswerInstructions,applyExpressionPolicy}=await import('./expression-policy.mjs');
+ assert.equal(PERSONA_VERSION,'2026-10-25.1');assert(personaInstructions.endsWith(directAnswerInstructions));assert(expressionInstructions.includes(directAnswerInstructions));
+ for(const rule of ['必要条件','假设与量词','先说具体内容','内部的来源、核验和权限检查留在内部处理'])assert(personaInstructions.includes(rule),rule);
+ for(const text of ['这不是充分条件，而只是必要条件。','连续函数不一定可导。','这个证明需要选择公理。','我们只读了这一页，后续证明还没有拿到。'])assert.equal(applyExpressionPolicy(text),text);
+ const {prepareModelInput}=await import('./model-input.mjs');const r=await prepareModelInput({request:{question:'解释共尾度',sources:[],context:[],developerInstructions:personaInstructions,memoryContext:{enabled:true,items:[],stylePreferences:[{id:'direct-answer',instruction:'直接回答'}]}}});
+ assert.equal(JSON.parse(r.prompt).longTermMemory.stylePreferences[0].id,'direct-answer');assert(r.developerInstructions.includes('通常直接回答当前内容'));
+});

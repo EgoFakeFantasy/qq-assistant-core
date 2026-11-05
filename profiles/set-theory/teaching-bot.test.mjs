@@ -70,7 +70,7 @@ test('full queue gives explicit mandatory feedback', async () => {
   const s = await setup({ maxQueue: 1 }); await s.bot.ingest(event(1));
   assert.equal((await s.bot.ingest(event(2))).status, 'queue_full'); assert.match(s.sent[0].text, /QUEUE_FULL/);
 });
-test('daily budget fails closed; next UTC day resets only the profile budget', async () => {
+test('daily budget fails closed; next configured local day resets only the profile budget', async () => {
   const s = await setup({ dailyModelCalls: 1 }); await s.bot.ingest(event(1)); await s.bot.ingest(event(2)); await s.bot.drain();
   assert.equal(s.requests.length, 1); assert.match(s.sent[1].text, /DAILY_BUDGET/);
   s.advance(86400000); await s.bot.ingest(event(3)); await s.bot.drain(); assert.equal(s.requests.length, 2);

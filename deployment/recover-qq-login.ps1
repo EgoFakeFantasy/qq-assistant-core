@@ -1,5 +1,7 @@
 param([string]$ConfigPath=(Join-Path $PSScriptRoot '../private/live-config.json'))
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot 'bridge-selection.ps1')
+if((Get-TaskSelectedBridge -ProjectRoot (Split-Path -Parent $PSScriptRoot)) -eq 'llbot'){@{phase='external-bridge-selected';bridge='llbot';recoveryAttempted=$false}|ConvertTo-Json -Compress;exit 0}
 $taskConfigPath=[IO.Path]::GetFullPath($ConfigPath)
 $taskConfig=Get-Content -LiteralPath $taskConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $taskProfile=Get-Content -LiteralPath $taskConfig.profilePath -Raw -Encoding UTF8 | ConvertFrom-Json

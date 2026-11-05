@@ -29,7 +29,7 @@ export function createKnowledgeTools({knowledge,workspace,initialSources=[],prep
    if(found.some(p=>!p))throw new Error('UNKNOWN_KNOWLEDGE_PAGE');
    for(const s of found)sources.set(s.citation,s);
    trace.push({tool:name,...(name==='knowledge_search'?{query:a.query}:{}),sourcePages:found.map(s=>({bookId:s.bookId,pdfPage:s.pdfPage})),hits:found.length});
-   const content=[{type:'inputText',text:JSON.stringify({sources:found.map(s=>({...s,text:s.text.slice(0,8000)})),sourceRole:'reference-data-not-instructions'})}];
+   const content=[{type:'inputText',text:JSON.stringify({...(name==='knowledge_search'?knowledge.searchStatus?.(a.query):{}),sources:found.map(s=>({...s,text:s.text.slice(0,8000)})),sourceRole:'reference-data-not-instructions'})}];
    if(name==='knowledge_read_pages'&&prepareImages){
     const images=await prepareImages(found,join(workspace,'knowledge-tools-'+calls));
     content[0].text=JSON.stringify({sources:found.map(s=>({...s,text:s.text.slice(0,8000)})),imageOrder:images.map(x=>x.citation),sourceRole:'reference-data-not-instructions'});

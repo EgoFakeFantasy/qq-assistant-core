@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$Image,[Parameter(Mandatory=$true)][string]$Output,[ValidateSet('zh-Hans-CN','en-US')][string]$Language='zh-Hans-CN')
+﻿param([Parameter(Mandatory=$true)][string]$Image,[Parameter(Mandatory=$true)][string]$Output,[ValidateSet('zh-Hans-CN','en-US')][string]$Language='zh-Hans-CN')
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 [void][Windows.Storage.StorageFile,Windows.Storage,ContentType=WindowsRuntime]

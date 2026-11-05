@@ -62,7 +62,7 @@ export function createKnowledgeBase(index = { pages: [] }) {
   const chapters=findChapters(pages);
   return {
     readPage(bookId,pdfPage){const p=pages.find(p=>p.bookId===bookId&&p.page===pdfPage);return p?source(p):null;},
-    search(query,{limit=4,maxCharacters=7200,bookIds,chapter}={}){
+    search(query,{limit=4,maxCharacters=7200,bookIds,chapter,definitionIntent=false}={}){
       const theorem=String(query).match(/(?:引理|定理|命题|推论|定义|lemma|theorem|proposition|corollary|definition)\s*(\d+(?:\.\d+){0,3})/i)?.[1];
       const terms=tokens(String(query).slice(0,12000)).slice(0,64);if(theorem)terms.push(theorem);if(!terms.length)return[];
       let eligible=pages.filter(p=>!bookIds||bookIds.includes(p.bookId));
@@ -71,7 +71,7 @@ export function createKnowledgeBase(index = { pages: [] }) {
       if(!eligible.length)return[];
       const average=eligible.reduce((n,p)=>n+p.text.length,0)/eligible.length;
       const frequencies=terms.map(term=>({term,idf:Math.log(1+(eligible.length+1)/(1+eligible.filter(p=>p.folded.includes(term)).length))}));
-      const definitionQuery=/定义|(?<!为)什么是|是什么|是什么意思|\b(?:definition|define|what is)\b/i.test(query);
+      const definitionQuery=definitionIntent||/定义|(?<!为)什么是|是什么|是什么意思|\b(?:definition|define|what is)\b/i.test(query);
       const q=fold(query);const concepts=[...aliases].filter(([zh,en])=>q.includes(zh)||en.some(s=>q.includes(s)));
       const matches=eligible.map(p=>{
         let score=frequencies.reduce((n,{term,idf})=>{const tf=p.folded.split(term).length-1;const normalization=1.2*(.25+.75*p.text.length/Math.max(1,average));return n+idf*(tf*2.2/(tf+normalization));},0);

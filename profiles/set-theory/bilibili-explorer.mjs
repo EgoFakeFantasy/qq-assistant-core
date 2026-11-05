@@ -1,20 +1,25 @@
+import {learningFeedback} from './learning-memory.mjs';
+import {randomUUID} from 'node:crypto';
 import {mkdtemp} from 'node:fs/promises';
+import {quotaTimeZone} from './quota-day.mjs';
 import {join} from 'node:path';
 import {publicQuery} from './public-fetch.mjs';
 import {formatQQReply} from './response-format.mjs';
 import {applyExpressionPolicy} from './expression-policy.mjs';
 import {openAutonomyStore,autonomyDay,autonomyCode,platformBlocked} from './autonomy-store.mjs';
-const broadInterests=['集合论','动画','游戏','音乐','生活日常'];
+const broadInterests=['集合论','动画','游戏','音乐','生活日常','欧陆哲学','分析哲学'];
 function queries(values){return [...new Set((values||[]).slice(0,4).flatMap(q=>{try{return [publicQuery(q).slice(0,80)];}catch{return [];}}))];}
 const interests=(config,learned=[])=>[...new Set([...(config.interestScope==='broad'?broadInterests:[]),...queries(learned)])].slice(0,10);
 const bounded=(n,min,max)=>Number.isSafeInteger(n)&&n>=min&&n<=max;
 
 export class BilibiliExplorer{
- #store;#state;#site;#media;#curator;#transport;#config;#now;#busy=false;#onShare;
- constructor({store,site,media,curator,transport,config,now,onShare}){this.#store=store;this.#state=store.state;this.#site=site;this.#media=media;this.#curator=curator;this.#transport=transport;this.#config=config;this.#now=now;this.#onShare=onShare;}
- static async open({root,site,media,curator,transport,config,now=Date.now,onShare=async()=>{}}){
+ #store;#state;#site;#media;#curator;#transport;#config;#now;#busy=false;#onShare;#learning;
+ constructor({store,site,media,curator,transport,config,now,onShare,learningMemory}){this.#learning=learningMemory;this.#store=store;this.#state=store.state;this.#site=site;this.#media=media;this.#curator=curator;this.#transport=transport;this.#config=config;this.#now=now;this.#onShare=onShare;}
+ static async open({root,site,media,curator,transport,config,now=Date.now,onShare=async()=>{},learningMemory=null}){
   config={maxVideosPerCycle:1,maxCycleMs:1500000,maxLikesPerDay:12,minShareIntervalMs:1800000,...config};
   if(!/^\d{4,20}$/.test(config.targetGroupId||'')||!bounded(config.intervalMs,300000,86400000)||!bounded(config.maxSharesPerDay,0,12)||!bounded(config.maxCommentsPerDay,0,12)||!bounded(config.maxLikesPerDay,0,50)||!bounded(config.maxVideosPerCycle,1,6)||!bounded(config.maxCycleMs,60000,3600000))throw Error('UNAPPROVED_BROWSE_CONFIG');
+  if(config.mentionRetryMs!==undefined&&!bounded(config.mentionRetryMs,1000,300000))throw Error('UNAPPROVED_BROWSE_CONFIG');
+  config.quotaTimeZone=quotaTimeZone(config.quotaTimeZone);
   const store=await openAutonomyStore(root,{stateFile:'browse-state.json',statusFile:'browse-status.json',initial:()=>({version:1,targetGroupId:config.targetGroupId,nextRunAt:0,interests:['集合论','数理逻辑','数学直觉'],seen:[],visits:[],actions:{},day:'',comments:0,shares:0,likes:0,phase:'ready',lastError:null,browseMode:'feed',lastShareAt:0})});
   const s=store.state;if(s.targetGroupId!==config.targetGroupId)throw Error('UNAPPROVED_BROWSE_CONFIG');
   if(s.version!==1||!Array.isArray(s.visits)||!Array.isArray(s.seen)||s.visits.length>100||s.seen.length>1000)throw Error('INVALID_BROWSE_STATE');
@@ -32,25 +37,27 @@ export class BilibiliExplorer{
    }
   }
   for(const a of Object.values(s.actions))for(const k of ['like','comment','share'])if(a[k]?.phase==='sending')a[k].phase='uncertain_after_restart';
-  const day=autonomyDay(now());
+  const day=autonomyDay(now(),config.quotaTimeZone);
   if(!s.day){s.day=day;s.comments=s.commentDay===day?s.comments||0:0;s.shares=s.shareDay===day?s.shares||0:0;s.likes=0;}
   if(['discovering','watching','reviewing','posting','sharing','liking'].includes(s.phase)){s.phase='interrupted';s.nextRunAt=now()+config.intervalMs;}
   if(config.interestScope==='broad')s.interests=interests(config,s.interests);
-  const e=new BilibiliExplorer({store,site,media,curator,transport,config,now,onShare});await e.#save();return e;
+  if(learningMemory)s.nextRunAt=Math.min(s.nextRunAt,now()+config.intervalMs);
+  const e=new BilibiliExplorer({store,site,media,curator,transport,config,now,onShare,learningMemory});await e.#save();return e;
  }
- get diagnostics(){const s=this.#state,c=this.#config;return {enabled:c.enabled,busy:this.#busy,targetGroupId:c.targetGroupId,phase:s.phase,nextRunAt:s.nextRunAt,lastError:s.lastError,interests:s.interests,browseMode:s.browseMode||'search',intervalMs:c.intervalMs,maxVideosPerCycle:c.maxVideosPerCycle,maxSharesPerDay:c.maxSharesPerDay,maxCommentsPerDay:c.maxCommentsPerDay,maxLikesPerDay:c.maxLikesPerDay,likesEnabled:c.likesEnabled===true,commentsEnabled:c.commentsEnabled===true,actionPauses:s.actionPauses,budget:{day:s.day,likes:s.likes,comments:s.comments,shares:s.shares},interestScope:c.interestScope||'mathematics',model:this.#curator.diagnostics,recent:s.visits.slice(-6).map(v=>({...v}))};}
- get due(){return this.#config.enabled&&!this.#busy&&this.#now()>=this.#state.nextRunAt;}
+ get diagnostics(){const s=this.#state,c=this.#config;return {enabled:c.enabled,quotaTimeZone:c.quotaTimeZone,busy:this.#busy,targetGroupId:c.targetGroupId,phase:s.phase,nextRunAt:s.nextRunAt,lastError:s.lastError,interests:s.interests,browseMode:s.browseMode||'search',intervalMs:c.intervalMs,maxVideosPerCycle:c.maxVideosPerCycle,maxSharesPerDay:c.maxSharesPerDay,maxCommentsPerDay:c.maxCommentsPerDay,maxLikesPerDay:c.maxLikesPerDay,likesEnabled:c.likesEnabled===true,commentsEnabled:c.commentsEnabled===true,actionPauses:s.actionPauses,budget:{day:s.day,likes:s.likes,comments:s.comments,shares:s.shares},learning:this.#learning?.diagnostics||null,interestScope:c.interestScope||'mathematics',model:this.#curator.diagnostics,recent:s.visits.slice(-6).map(v=>({...v}))};}
+ get due(){return this.#config.enabled&&!this.#busy&&this.#now()>=this.#state.nextRunAt&&(!this.#learning||(this.#learning.remaining()>=10&&this.#learning.wantsMore()));}
  #save(){return this.#store.save(this.diagnostics);}
- #newDay(){const s=this.#state,d=autonomyDay(this.#now());if(s.day!==d){s.day=d;s.comments=0;s.shares=0;s.likes=0;}}
+ #newDay(){const s=this.#state,d=autonomyDay(this.#now(),this.#config.quotaTimeZone);if(s.day!==d){s.day=d;s.comments=0;s.shares=0;s.likes=0;}}
  async #record(v,kind,receipt){v[kind]=receipt;this.#state.actions[v.bvid]??={};this.#state.actions[v.bvid][kind]=receipt;await this.#save();}
  #mayWrite(v,kind){return !this.#state.actions[v.bvid]?.[kind]&&(this.#state.actions[v.bvid]||Object.keys(this.#state.actions).length<5000);}
  async #discover(signal,step){
-  const s=this.#state,topic=s.interests[(s.visits.length+step)%Math.max(1,s.interests.length)]||'集合论',mode=s.browseMode||'search';
+  const s=this.#state,topic=this.#learning?.topic('video',s.interests,s.discoveryCursor||0)||s.interests[(s.visits.length+step)%Math.max(1,s.interests.length)]||'集合论',mode=s.browseMode||'search';
+  s.discoveryCursor=(s.discoveryCursor||0)+1;s.searchQuery=topic;
   let candidates=[];
   try{if(mode==='feed')candidates=await this.#site.feed({signal});else if(mode==='related'&&s.visits.length)candidates=await this.#site.related(s.visits.at(-1).bvid,{signal});}catch(e){if(platformBlocked(autonomyCode(e)))throw e;}
   // Search also provides a fresh route when a personal feed repeats old items.
-  if(mode==='search'||!candidates.some(v=>!s.seen.includes(v.bvid)))candidates.push(...await this.#site.discover(topic,{signal,page:1+Math.floor(s.visits.length/10)%5,order:s.visits.length%3===1?'pubdate':'totalrank'}));
-  return [...new Map(candidates.filter(v=>v.duration>=10&&v.duration<=1800&&!s.seen.includes(v.bvid)).map(v=>[v.bvid,v])).values()].slice(0,16);
+  if(this.#learning||mode==='search'||!candidates.some(v=>!s.seen.includes(v.bvid))){const found=await this.#site.discover(topic,{signal,page:1+Math.floor(s.visits.length/10)%5,order:s.visits.length%3===1?'pubdate':'totalrank'});candidates=this.#learning?[...found,...candidates]:[...candidates,...found];}
+  return [...new Map(candidates.filter(v=>v.duration>=10&&v.duration<=Math.min(1800,this.#learning?.remaining()??1800)&&!s.seen.includes(v.bvid)).map(v=>[v.bvid,v])).values()].slice(0,16);
  }
  async #reconcile(signal){
   for(const v of this.#state.visits.slice(-8)){
@@ -87,15 +94,15 @@ export class BilibiliExplorer{
    catch(e){await this.#record(v,'share',{phase:'uncertain',reason:autonomyCode(e)});}
   }
  }
- async run({signal,manual=false}={}){
-  if(this.#busy||!this.#config.enabled||(!manual&&!this.due))return {status:'not-due'};
+ async run({signal,manual=false,readOnly=false,onlineCheck}={}){
+  if(this.#busy||!this.#config.enabled||(!manual&&!this.due)||this.#learning&&(this.#learning.remaining()<10||!this.#learning.wantsMore()))return {status:'not-due'};
   const parentSignal=signal;signal=AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(this.#config.maxCycleMs)]);
-  this.#busy=true;const s=this.#state,at=this.#now();s.nextRunAt=at+this.#config.intervalMs;s.phase='discovering';s.lastError=null;let visit,workspace,completed=0;
+  this.#busy=true;const s=this.#state,at=this.#now();s.nextRunAt=at+this.#config.intervalMs;s.phase='discovering';s.lastError=null;let visit,workspace,reservation=null,completed=0;
   try{
-   await this.#save();const health=await this.#transport.check();if(!health.online||!health.memberOfGroup)throw Error('TARGET_QQ_GROUP_OFFLINE');
+   await this.#save();const health=await (onlineCheck?onlineCheck():this.#transport.check());if(!health.online||!health.memberOfGroup)throw Error('TARGET_QQ_GROUP_OFFLINE');
    const identity=await this.#site.check({signal});if(!identity.connected||!identity.uidMatched)throw Error('BILIBILI_LOGIN_REQUIRED');
    if(identity.authRevision){if(s.authRevision&&s.authRevision!==identity.authRevision)s.actionPauses={};s.authRevision=identity.authRevision;}
-   await this.#reconcile(signal);
+   if(!readOnly)await this.#reconcile(signal);
    for(let step=0;step<this.#config.maxVideosPerCycle&&this.#now()-at<this.#config.maxCycleMs;step++){
     signal?.throwIfAborted();s.phase='discovering';await this.#save();
     const choices=await this.#discover(signal,step);if(!choices.length){if(!completed)s.phase='no-candidate';break;}
@@ -108,20 +115,25 @@ export class BilibiliExplorer{
     const evidence=await this.#media.prepare(selected.bvid,workspace,{signal});
     try{evidence.publicComments=await this.#site.comments?.(selected.bvid,{signal})||[];}catch(e){if(platformBlocked(autonomyCode(e)))throw e;evidence.publicComments=[];}
     Object.assign(visit,{transcriptKind:evidence.transcriptKind,frameCount:evidence.frames.length,scope:evidence.scope,transcriptEnd:evidence.transcriptEnd,duration:evidence.video.duration,phase:'reviewing'});s.phase='reviewing';await this.#save();
-    const r=await this.#curator.review(evidence,{signal});
+    reservation=randomUUID();if(this.#learning&&!this.#learning.reserve(reservation,evidence.video.duration)){s.phase='daily-video-budget-ended';break;}
+    const r=await this.#curator.review({...evidence,learningMemory:this.#learning?.recall(evidence.video.title,3)},{signal});
+    if(this.#learning&&(!['like','neutral','dislike'].includes(r.feedback)||typeof r.feedbackReason!=='string'||!r.feedbackReason.trim()))throw Error('LEARNING_FEEDBACK_REQUIRED');
     if(typeof r.summary!=='string'||!Number.isFinite(r.interestScore)||r.interestScore<0||r.interestScore>1||!Array.isArray(r.evidenceTimes)||r.evidenceTimes.some(t=>!Number.isFinite(t)||t<0||t>evidence.video.duration))throw Error('CURATOR_REVIEW_INVALID');
     Object.assign(visit,{summary:r.summary.slice(0,1500),visualFramesSupplied:r.visualFramesSupplied||null,interestScore:r.interestScore,evidenceTimes:r.evidenceTimes});
-    if(queries(r.nextQueries).length)s.interests=interests(this.#config,r.nextQueries);
+    if(queries(r.nextQueries).length&&(!this.#learning||learningFeedback(r)!=='dislike'))s.interests=interests(this.#config,r.nextQueries);
     if(['feed','related','search'].includes(r.browseMode))s.browseMode=r.browseMode;
+    visit.feedback=learningFeedback(r);visit.feedbackReason=String(r.feedbackReason||'').slice(0,500);visit.searchQuery=s.searchQuery;
+    this.#learning?.record({kind:'video',budgetId:reservation,key:selected.bvid,title:visit.title,url:visit.url,summary:r.summary,feedback:visit.feedback,reason:visit.feedbackReason,topics:[s.searchQuery,...(visit.feedback==='like'?queries(r.nextQueries):[])],evidence:{scope:evidence.scope,transcriptKind:evidence.transcriptKind,transcript:evidence.transcript||'',transcriptEnd:evidence.transcriptEnd,transcriptTruncated:evidence.transcriptTruncated,frameTimestamps:evidence.frameTimestamps||evidence.frames.map(f=>f.timestamp),evidenceTimes:r.evidenceTimes,workspace}});
+    this.#learning?.finish(reservation);reservation=null;
     s.seen.push(selected.bvid);s.seen=s.seen.slice(-1000);
-    await this.#actions(visit,evidence,r,signal);visit.phase='complete';completed++;s.phase='ready';await this.#save();
+    if(!readOnly&&this.#learning?.persona!=='hui')await this.#actions(visit,evidence,r,signal);visit.phase='complete';completed++;s.phase='ready';await this.#save();
     await this.#media.cleanup?.(workspace);workspace=null;if(r.continueBrowsing===false)break;
    }
    return {status:completed?'complete':s.phase,completed,bvid:visit?.bvid,like:visit?.like,comment:visit?.comment,share:visit?.share};
   }catch(e){
-   if(signal?.aborted){s.phase=parentSignal?.aborted?'deferred-for-mentions':'cycle-budget-ended';s.lastError=null;s.nextRunAt=Math.max(s.nextRunAt,this.#now()+300000);if(visit){visit.phase='deferred';if(['like','comment','share'].every(k=>visit[k].phase==='not-requested'))s.seen=s.seen.filter(id=>id!==visit.bvid);}await this.#save();return {status:s.phase};}
+   if(signal?.aborted){s.phase=parentSignal?.aborted?'deferred-for-mentions':'cycle-budget-ended';s.lastError=null;s.nextRunAt=this.#config.mentionRetryMs&&parentSignal?.aborted?this.#now()+this.#config.mentionRetryMs:Math.max(s.nextRunAt,this.#now()+300000);if(visit){visit.phase='deferred';if(['like','comment','share'].every(k=>visit[k].phase==='not-requested'))s.seen=s.seen.filter(id=>id!==visit.bvid);}await this.#save();return {status:s.phase};}
    s.lastError=autonomyCode(e);s.phase=platformBlocked(s.lastError)?'authorization-or-backoff':'failed';if(platformBlocked(s.lastError))s.nextRunAt=Math.max(s.nextRunAt,this.#now()+1800000);
    if(visit){visit.phase='failed';visit.error=s.lastError;}await this.#save();return {status:s.phase,error:s.lastError};
-  }finally{try{await this.#media.cleanup?.(workspace);}catch{s.lastError||='VIDEO_CACHE_CLEANUP_FAILED';}this.#busy=false;await this.#save();}
+  }finally{if(reservation)this.#learning?.release(reservation);try{await this.#media.cleanup?.(workspace);}catch{s.lastError||='VIDEO_CACHE_CLEANUP_FAILED';}this.#busy=false;await this.#save();}
  }
 }

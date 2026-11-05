@@ -294,3 +294,9 @@ npm run ncc -- status
 3. 补充 `test/environment-config.test.js`。
 4. 同步本页中英文版本和维护 Skill。
 5. 运行 `npm run verify`。
+
+## 集合论助手按群回复策略
+
+additionalGroups 每个群可独立设置 replyPolicy 为 adaptive（默认）或 mentions-only。mentions-only 只对当前群生效：群友当前消息必须真实 @ 本机器人，才能触发问答、资料命令或反馈；普通聊天、集合论话题、@全体、@他人、引用里的@和未带@的人格召唤不会触发。群内文字仍可作为后续被@问题的同群上下文。恢复旧队列时也执行门禁。
+
+发送通道会读取 QQ 原消息核实群号、消息号及真实@，并拒绝该群所有自主发送；后台工作池不会在该群安排B站或论文推荐。每个新增群显式归一化自己的策略，其他群保持原模式。api/state 的 groups 条目显示 replyPolicy 和 autonomousTopicsEnabled。

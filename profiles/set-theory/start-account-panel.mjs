@@ -6,7 +6,7 @@ import QRCode from 'qrcode';
 import {createWindowsVault} from './account-vault.mjs';
 import {createPlatformAccounts} from './platform-accounts.mjs';
 import {createAccountPanel} from './account-panel.mjs';
-const root=resolve(fileURLToPath(new URL('../../',import.meta.url)));
+const root=resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const at=process.argv.indexOf('--config');
 const runtime=JSON.parse(await readFile(at<0?join(root,'private/live-config.json'):resolve(process.argv[at+1]),'utf8'));
 const vault=createWindowsVault(join(runtime.runtimeRoot,'..','credentials','platforms'));

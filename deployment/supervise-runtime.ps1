@@ -1,5 +1,6 @@
 param([switch]$Once,[string]$ConfigPath=(Join-Path $PSScriptRoot '../private/live-config.json'))
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot 'bridge-selection.ps1')
 $taskRoot=Split-Path -Parent $PSScriptRoot
 $taskConfigPath=[IO.Path]::GetFullPath($ConfigPath)
 $taskConfig=Get-Content -LiteralPath $taskConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -25,6 +26,11 @@ function Start-TaskNode([string]$Kind,[string]$Executable,[string]$Entry,[string
 }
 try{
  do{
+  if((Get-TaskSelectedBridge -ProjectRoot $taskRoot) -eq 'llbot'){
+   $taskHealth=& $taskNode (Join-Path $PSScriptRoot 'runtime-health.mjs') | ConvertFrom-Json
+   @{time=[DateTime]::UtcNow.ToString('o');bridge='llbot';health=$taskHealth;loginRecovery=@{phase='external-bridge-selected';recoveryAttempted=$false}}|ConvertTo-Json -Depth 8|Set-Content -LiteralPath (Join-Path $taskMonitor 'status.json') -Encoding UTF8
+   if(-not $Once){Start-Sleep -Seconds 30};continue
+  }
   try{
    $taskBatteries=@(Get-CimInstance -Namespace root/WMI -ClassName BatteryStatus -ErrorAction SilentlyContinue | Where-Object {$_.Active})
    $taskPower=if($taskBatteries.Count){[bool]($taskBatteries | Where-Object {$_.PowerOnline})}else{$true}

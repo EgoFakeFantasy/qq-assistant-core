@@ -2,7 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {mkdtemp,readFile,writeFile} from 'node:fs/promises';import {tmpdir} from 'node:os';import {join} from 'node:path';
 import {BilibiliExplorer} from './bilibili-explorer.mjs';
 import {createBilibiliSite,signBilibiliQuery} from './bilibili-site.mjs';
-const BILIBILI_UID='4000000004';
+const BILIBILI_UID='1000000001';
 import {createBilibiliMedia,sampleTimestamps} from './bilibili-media.mjs';
 const bvid='BV1gfpV6SEWb',video={bvid,aid:1,cid:2,title:'集合论视频',url:'https://www.bilibili.com/video/'+bvid,duration:120,pages:[{page:1}]};
 const config={enabled:true,targetGroupId:'1000000001',intervalMs:7200000,maxSharesPerDay:2,maxCommentsPerDay:1,commentsEnabled:true};
@@ -79,4 +79,14 @@ test('curator uses the same high reasoning route and both six-frame batches with
 
 test('broad interests keep animation games music and daily-life anchors while learning new topics',async()=>{
  const f=await fixture({config:{...config,interestScope:'broad'}});await f.explorer.run();const i=f.explorer.diagnostics.interests;for(const topic of ['动画','游戏','音乐','生活日常'])assert.ok(i.includes(topic));assert.ok(i.includes('集合论 公理'));assert.equal(f.explorer.diagnostics.interestScope,'broad');
+});
+
+test('idle read-only viewing retains evidence and philosophy interests without likes comments or QQ shares',async()=>{
+ const f=await fixture({config:{...config,interestScope:'broad',likesEnabled:true,maxLikesPerDay:12}});
+ f.site.like=async()=>{assert.fail('idle viewing must not like');};
+ f.transport.check=async()=>({online:false,memberOfGroup:false});
+ const result=await f.explorer.run({readOnly:true,onlineCheck:async()=>({online:true,memberOfGroup:true})});
+ assert.equal(result.status,'complete');assert.equal(f.calls.watch,1);assert.equal(f.calls.review,1);assert.equal(f.calls.comment,0);assert.equal(f.calls.share,0);
+ for(const topic of ['欧陆哲学','分析哲学'])assert.ok(f.explorer.diagnostics.interests.includes(topic));
+ assert.equal(f.explorer.diagnostics.recent[0].frameCount,12);
 });

@@ -14,10 +14,10 @@ test('real transport verifies identity and membership before the only permitted 
  const transport=createLiveOneBot({baseUrl:'http://127.0.0.1:3000/',token:'fixture'.repeat(8),groupId:config.groupId,botId:config.botId,
   fetchFn:async(url,options)=>{const action=new URL(url).pathname;calls.push({action,body:JSON.parse(options.body)});
    return {ok:true,json:async()=>({status:'ok',retcode:0,data:action==='/get_login_info'?{user_id:config.botId}:action==='/get_group_list'?[{group_id:config.groupId}]:{message_id:42}})};}});
- assert.deepEqual(await transport.send({groupId:config.groupId,replyTo:'1',text:'Hello'}),{ok:true,messageId:'42'});
- assert.deepEqual(calls.map(c=>c.action),['/get_login_info','/get_group_list','/send_group_msg']);
+ assert.deepEqual(await transport.send({groupId:config.groupId,replyTo:'1',text:'Hello'}),{ok:true,messageId:'42',deliveryMode:'inline',verified:false});
+ assert.deepEqual(calls.map(c=>c.action),['/get_login_info','/get_group_list','/send_group_msg','/get_msg']);
  await assert.rejects(transport.send({groupId:'99999',replyTo:'1',text:'Hello'}),/SCOPE/);
- assert.equal(calls.length,3);
+ assert.equal(calls.length,4);
 });
 
 test('wrong logged-in account and nonloopback URLs fail closed',async()=>{

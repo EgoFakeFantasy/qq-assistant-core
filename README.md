@@ -73,18 +73,22 @@ Replies above 500 visible characters or 12 lines are folded into a merged QQ cha
 
 Local expression policy and the optional reviewed cute-sticker catalog are described in [Local stickers](docs/LOCAL_STICKERS.md). Actual QQ image assets remain private.
 
-See [local operations](docs/ASSISTANT_OPERATIONS.md) for optional Windows supervision and protected QQ password recovery.
+See [local operations](docs/ASSISTANT_OPERATIONS.md) for manual QQ login and read-only health checks. Automatic QQ password recovery is excluded.
 
 ## Autonomous academic reading
 
 Enable autonomousScholar.enabled in private/profile.json and use the primary targetGroupId. Sources rotate across arXiv categories and Crossref journal records. Public HTML/PDF is preferred; abstract-only recommendations are labelled. Support quotes must match actual reading blocks, and DOI/title deduplication covers preprint and journal versions. Both interests share one preemptible background slot and the same Codex allowance. See [autonomy configuration](docs/AUTONOMY.md).
+
+## Long-term memory and optional Hui persona
+
+Group-scoped long-term memory separates member preferences, tentative claims and explicit corrections. Persona candidates remain unapplied. Offline history replay makes no model calls or QQ writes; see [long-term memory](docs/LONG_TERM_MEMORY.md). The optional [Hui persona](docs/SECONDARY_PERSONA.md) is disabled by default and uses current real self-mention plus explicit name routing when enabled.
 
 ## Layout
 
 - profiles/set-theory/: the research assistant, retrieval, persona, workers, resource tools, account vault and Bilibili explorer.
 - src/app/teaching-hub.js: authenticated local Hub and per-group composition.
 - tools/import_library.py: portable, private PDF/OCR ingestion.
-- deployment/: Windows OCR and bounded QQ login/supervision utilities.
+- deployment/: Windows OCR and read-only QQ health utilities.
 - scripts/: private configuration initialization, operator tools and verification.
 - docs/upstream/: preserved original upstream entry documentation. Other legacy upstream files remain for provenance; the research assistant entry points are the ones documented here.
 
@@ -99,3 +103,11 @@ npm run audit:public
 ```
 
 CI runs the core and synthetic PDF tests on Windows and Linux. This checks implementation and isolation behavior; it does not certify every mathematical answer or guarantee permanent QQ/Bilibili login.
+
+## Issue fixes and QQ private replies
+
+Friend-only private replies are opt-in and isolated per contact. See [configuration and reading-scope fixes](docs/ISSUE_FIXES_AND_PRIVATE_MESSAGES.md).
+
+## Complete reusable snapshot and retired deployment
+
+The reusable snapshot now includes Axu/Hui CLI routing, reviewed cognition, durable social memory, persona learning, private-message isolation, official QQ SDK and staged LLBot adapters. Start with [REUSE.md](docs/REUSE.md). Personal credentials, account/group bindings, conversations, textbooks, indexes and runtime logs are excluded. The original maintained deployment is retired; a clone creates no scheduled task or live bot. All optional autonomous features default to disabled.

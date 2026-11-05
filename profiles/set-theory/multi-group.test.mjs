@@ -8,7 +8,6 @@ import {createKnowledgeBase} from './knowledge.mjs';
 import {LocalDurableState} from './local-durable-state.mjs';
 const base=JSON.parse(await readFile(new URL('./profile.json',import.meta.url),'utf8'));
 const ids=['1000000001','1000000002','1000000003'];
-base.allowedGroupIds=ids;
 const token='multigroup-test-token-0123456789';
 const event=(group,id,text='hello',mention=true)=>({post_type:'message',message_type:'group',self_id:base.botId,group_id:group,user_id:'12345678',message_id:id,message:[...(mention?[{type:'at',data:{qq:base.botId}}]:[]),{type:'text',data:{text}}]});
 async function setup(t,root,overrides={}){
@@ -29,7 +28,7 @@ test('authenticated route accepts mentions in three approved groups and rejects 
  const f=await setup(t);
  assert.equal((await fetch(f.url+'/api/onebot/event',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(event(ids[1],1))})).status,403);
  for(const id of ids)assert.deepEqual(await f.post(event(id,1,'private context '+id)),{status:'queued',mandatory:true});
- assert.equal((await f.post({...event('555555',2),group_name:'Example mathematics group',owner:true})).status,'ignored');
+ assert.equal((await f.post({...event('555555',2),group_name:'Example research group',owner:true})).status,'ignored');
  assert.equal((await f.post({...event(ids[1],2),self_id:'555555'})).status,'ignored');
  await f.hub.drain();assert.equal(f.sent.length,3);
  for(const {groupId,request} of f.requests){assert.equal(request.mandatory,true);assert.equal(request.model,base.model);assert.equal(request.reasoningEffort,'high');assert.deepEqual(request.context.map(c=>c.text),['private context '+groupId]);assert.ok(!f.sent.find(m=>m.groupId===groupId).text.includes('**'));}

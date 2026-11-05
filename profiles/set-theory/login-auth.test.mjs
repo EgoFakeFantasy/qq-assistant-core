@@ -1,23 +1,8 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import {authenticateWebui} from '../../deployment/napcat-webui-auth.mjs';
-const good=()=>new Response(JSON.stringify({code:0,data:{Credential:'fixture-session'}}));
-const bad=()=>new Response(JSON.stringify({code:-1}));
-test('valid saved panel token needs no filesystem access or user input',async()=>{
- const result=await authenticateWebui({runtime:{webuiToken:'fixture-old'},root:'/fixture',fetchFn:async()=>good(),readConfig:async()=>{throw Error('unexpected read');}});
- assert.equal(result.credential,'fixture-session');assert.equal(result.tokenSource,'saved-config');
-});
-test('a rotated panel token is recovered locally without echoing or persisting it',async()=>{
- let n=0;const result=await authenticateWebui({runtime:{webuiToken:'fixture-old',napcatEntryPath:'/fixture/index.js'},root:'/fixture',stat:async()=>({isFile:()=>true,isSymbolicLink:()=>false,size:100}),readConfig:async()=>JSON.stringify({token:'fixture-new'}),fetchFn:async(url,opt)=>{assert.equal(url,'http://127.0.0.1:6099/api/auth/login');assert.equal(opt.redirect,'error');assert(!opt.body.includes('fixture-new'));return n++?good():bad();}});
- assert.equal(result.tokenSource,'napcat-config');assert(!JSON.stringify(result).includes('fixture-new'));assert.equal(n,2);
-});
-test('network faults do not trigger local token guessing or repeated auth attempts',async()=>{
- let reads=0;await assert.rejects(authenticateWebui({runtime:{webuiToken:'fixture-old'},root:'/fixture',fetchFn:async()=>{throw Error('network');},readConfig:async()=>{reads++;}}),/network/);assert.equal(reads,0);
-});
-test('symlinked or oversized token files are refused before reading',async()=>{
- for(const info of [{link:true,size:100},{link:false,size:70000}]){let read=false;await assert.rejects(authenticateWebui({runtime:{webuiToken:'fixture-old'},root:'/fixture',fetchFn:async()=>bad(),stat:async()=>({isFile:()=>true,isSymbolicLink:()=>info.link,size:info.size}),readConfig:async()=>{read=true;}}),/TOKEN_UNAVAILABLE/);assert.equal(read,false);}
-});
-
-test('an expired management session reported as HTTP 401 can refresh once',async()=>{
- let n=0;const result=await authenticateWebui({runtime:{webuiToken:'fixture-old'},root:'/fixture',stat:async()=>({isFile:()=>true,isSymbolicLink:()=>false,size:100}),readConfig:async()=>JSON.stringify({token:'fixture-new'}),fetchFn:async()=>n++?good():new Response('',{status:401})});assert.equal(result.tokenSource,'napcat-config');assert.equal(n,2);
-});
+import test from 'node:test';import assert from 'node:assert/strict';import {createHash} from 'node:crypto';import {authenticateWebui} from '../../deployment/napcat-webui-auth.mjs';
+const good=()=>Response.json({code:0,data:{Credential:'fixture-session'}}),bad=()=>Response.json({code:-1});
+const hash=t=>createHash('sha256').update(t+'.napcat').digest('hex');
+test('saved panel token works when there is no current local token source',async()=>{const r=await authenticateWebui({runtime:{webuiToken:'fixture-old'},root:'/fixture',discoverTokens:async()=>[],fetchFn:async()=>good(),readConfig:async()=>{throw Error('unexpected read');}});assert.equal(r.credential,'fixture-session');assert.equal(r.tokenSource,'saved-config');});
+test('current NapCat config is preferred over a stale saved panel token without exposing either',async()=>{let n=0;const r=await authenticateWebui({runtime:{webuiToken:'fixture-old',napcatEntryPath:'/fixture/index.js'},root:'/fixture',discoverTokens:async()=>[],stat:async()=>({isFile:()=>true,isSymbolicLink:()=>false,size:100}),readConfig:async()=>JSON.stringify({token:'fixture-new'}),fetchFn:async(url,o)=>{n++;assert.equal(url,'http://127.0.0.1:6099/api/auth/login');assert.equal(o.redirect,'error');assert.equal(JSON.parse(o.body).hash,hash('fixture-new'));return good();}});assert.equal(r.tokenSource,'napcat-config');assert.equal(n,1);assert(!JSON.stringify(r).includes('fixture-new'));});
+test('network faults stop auth instead of trying more credentials',async()=>{let calls=0;await assert.rejects(authenticateWebui({runtime:{webuiToken:'fixture-old'},root:'/fixture',discoverTokens:async()=>['fixture-current'],fetchFn:async()=>{calls++;throw Error('network');}}),/WEBUI_UNAVAILABLE/);assert.equal(calls,1);});
+test('symlinked or oversized current token files are never read',async()=>{for(const info of [{link:true,size:100},{link:false,size:70000}]){let read=false;await assert.rejects(authenticateWebui({runtime:{webuiToken:'fixture-old'},root:'/fixture',discoverTokens:async()=>[],fetchFn:async()=>bad(),stat:async()=>({isFile:()=>true,isSymbolicLink:()=>info.link,size:info.size}),readConfig:async()=>{read=true;}}),/WEBUI_AUTH_FAILED/);assert.equal(read,false);}});
+test('a stale startup token rejected with HTTP 401 falls back once to current config',async()=>{let n=0;const r=await authenticateWebui({runtime:{},root:'/fixture',discoverTokens:async()=>['fixture-old'],stat:async()=>({isFile:()=>true,isSymbolicLink:()=>false,size:100}),readConfig:async()=>JSON.stringify({token:'fixture-new'}),fetchFn:async()=>n++?good():new Response('',{status:401})});assert.equal(r.tokenSource,'napcat-config');assert.equal(n,2);});
